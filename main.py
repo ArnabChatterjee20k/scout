@@ -1,6 +1,3 @@
-def main():
-    print("Hello from scout!")
+from scout.logger import logger
 
-
-if __name__ == "__main__":
-    main()
+logger.info(msg="hey", tag="arnab")
