@@ -37,7 +37,7 @@ class TaggedLogger(logging.Logger):
 
 
 def get_logger(name: str = "app") -> logging.Logger:
-    level=logging.INFO
+    level = logging.INFO
     logging.setLoggerClass(TaggedLogger)
 
     logger = logging.getLogger(name)

@@ -1,9 +1,15 @@
+from .adapters.Playwright import PlaywrightAdapter
+from .core import Action
+
+
 class Scout:
     def __init__(self):
-        pass
+        self._crawler = PlaywrightAdapter()
 
-    def scrape(self):
-        pass
+    async def scrape(self, url: str, actions: list[Action] | None = None):
+        actions = actions or []
+        async with self._crawler as crawler:
+            return await crawler.scrape(url, actions)
 
     def crawl(self):
         pass
