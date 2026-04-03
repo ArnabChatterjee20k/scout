@@ -80,11 +80,16 @@ class PlaywrightAdapter:
             )
             if not is_visible:
                 raise Exception("Body not visible")
-
+            
+            await page.wait_for_timeout(500)
+            await self._remove_popups(page)
             await self._simulate_user(page)
 
             for action in actions:
-                await self.execute(page, action)
+                try:
+                    await self.execute(page, action)
+                except Exception as e:
+                    self._logger.error(msg= action.kind, error=str(e), tag=f"ACTION")
 
             await page.wait_for_timeout(self._timeout)
             html = await page.content()
@@ -172,8 +177,7 @@ class PlaywrightAdapter:
     async def _remove_popups(self, page: Page):
         remove_popup_js = load_script("remove_popup")
         try:
-            await self.adapter.evaluate(
-                page,
+            await page.evaluate(
                 f"""
                 (async () => {{
                     try {{
@@ -193,7 +197,7 @@ class PlaywrightAdapter:
             await page.wait_for_timeout(500)
         except Exception as e:
             self._logger.error(
-                msg="Failed to remove popups", tag="SCRAPE", error=str(e)
+                msg="Failed to remove popups", tag="CONSENT_MANAGEMENT", error=str(e)
             )
 
     async def _simulate_user(self, page: Page, interactions: int = 3) -> None:
