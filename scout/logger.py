@@ -13,17 +13,13 @@ class SafeFormatter(logging.Formatter):
 
 
 class TaggedLogger(logging.Logger):
-    def log(self, level, msg, *args, tag=None, **kwargs):
-        extra = kwargs.get("extra", {})
-        error = kwargs.get("error", {})
+    def log(self, level, msg, *args, tag=None, error=None, **kwargs):
+        extra = dict(kwargs.pop("extra", None) or {})
         if tag is not None:
             extra["tag"] = tag
-
         if error is not None:
             extra["error"] = error
-
         kwargs["extra"] = extra
-        kwargs["error"] = error
         super().log(level, msg, *args, **kwargs)
 
     def info(self, msg, *args, tag=None, **kwargs):
@@ -33,7 +29,7 @@ class TaggedLogger(logging.Logger):
         self.log(logging.WARNING, msg, *args, tag=tag, **kwargs)
 
     def error(self, msg, *args, tag=None, error=None, **kwargs):
-        self.log(logging.ERROR, msg, *args, tag=tag, error=None, **kwargs)
+        self.log(logging.ERROR, msg, *args, tag=tag, error=error, **kwargs)
 
 
 def get_logger(name: str = "app") -> logging.Logger:
