@@ -19,6 +19,7 @@ class PlaywrightAdapter:
         self._logger = get_logger("Playwright")
         self.screenshots: list[Union[bytes, str]] = []
         self._timeout = TIMEOUT
+        self._url_timeout = TIMEOUT
 
         # rules
         self._network_rule = NetworkRule()
@@ -62,7 +63,7 @@ class PlaywrightAdapter:
         page.set_default_navigation_timeout(self._timeout)
         listener = self._handle_listeners(page)
         try:
-            nav_response = await page.goto(url, timeout=self._timeout)
+            nav_response = await page.goto(url, wait_until="domcontentloaded", timeout=self._url_timeout)
             await page.wait_for_selector("body", timeout=self._timeout)
             next(listener)
             is_visible = await self.execute(

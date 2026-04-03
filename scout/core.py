@@ -79,9 +79,6 @@ class Document:
     def extract_with_llm(self):
         pass
 
-    def interact(self):
-        pass
-
 
 SELECTOR_KIND = Literal["css", "xpath", "text", "url", "load_state", "tag"]
 
