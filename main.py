@@ -44,7 +44,7 @@ async def run_heavier_page() -> None:
     More DOM + network than example.com; still static enough for a smoke test.
     Tune the ``load_state`` action if the site is chatty (networkidle can time out).
     """
-    url = "https://news.ycombinator.com"
+    url = "https://open.spotify.com/playlist/37i9dQZF1DZ06evO4mwRSU"
     actions = [
         # Wait until network is quiet (useful before asserting on dynamic UIs).
         Action(
@@ -64,15 +64,26 @@ async def run_heavier_page() -> None:
 
 def _print_doc_summary(doc, *, label: str) -> None:
     print(f"\n--- {label} ---")
-    print("title:", doc.metadata.get("title"))
-    print("http status:", doc.metadata.get("status"))
-    print("html length:", len(doc.html))
-    print("screenshot count:", len(doc.screenshots))
-    print("metadata keys:", sorted(doc.metadata.keys()))
+    if doc is None:
+        print("scrape returned None")
+        return
+    print("responses:", len(getattr(doc, "response", []) or []))
+    print("screenshots:", len(getattr(doc, "screenshots", []) or []))
+    if getattr(doc, "metadata", None):
+        print("title:", doc.metadata.get("title"))
+        print("http status:", doc.metadata.get("status"))
+
+    for response in doc.response:
+        print(response.url, '->', response.status)
+    # print("title:", doc.metadata.get("title"))
+    # print("http status:", doc.metadata.get("status"))
+    # print("html length:", len(doc.html))
+    # print("screenshot count:", len(doc.screenshots))
+    # print("metadata keys:", sorted(doc.metadata.keys()))
 
 
 async def main() -> None:
-    await run_example_com()
+    # await run_example_com()
     await run_heavier_page()
 
 

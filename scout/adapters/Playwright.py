@@ -1,14 +1,14 @@
-from typing import Any, Literal, Optional, Union
-
-from ..core import Document, Action, Selector
+from typing import Any, Optional, Union
+from ..core import Document, Action, Selector, NetworkRule, RequestModel, ResponseModel
 from ..scripts import load_script
 from ..logger import get_logger
-from playwright.async_api import async_playwright, Playwright, Browser, Page
+from playwright.async_api import async_playwright, Playwright, Browser, Page, Request, Response
 
 # TODO: add functionality to use and reuse a session via storage_state in playwright
 # TODO: add a way to run js code on the page
 
-TIMEOUT = 300000
+# make it dynamic
+TIMEOUT = 3000
 
 
 class PlaywrightAdapter:
@@ -18,34 +18,43 @@ class PlaywrightAdapter:
         self._logger = get_logger("Playwright")
         self.screenshots: list[Union[bytes, str]] = []
 
+        # rules
+        self._network_rule = NetworkRule()
+
+        self._requests = []
+        self._responses = []
+
     async def __aenter__(self):
         await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.stop()
-        return self
+        # Do not suppress exceptions from inside `async with`.
+        # Returning a truthy value would swallow errors and make `scrape()` look like it returned None.
+        return False
+    
+    # rules
+    def set_network_rule(self, rule: NetworkRule):
+        self._network_rule = rule
 
+    # interaction methods
     async def start(self):
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch()
+        self.browser = await self.playwright.chromium.launch(headless=False)
 
     async def stop(self):
         await self.browser.close()
         return self
 
-    def get_browser(self):
-        pass
-
     async def scrape(self, url: str, actions: list[Action] = []):
         self.screenshots = []
         page = await self.browser.new_page()
-        nav_response = await page.goto(url)
-        # execute actions
-        # execute js code
-        # capture requests, responses
+        listener = self._handle_listeners(page)
         try:
+            nav_response = await page.goto(url)
             await page.wait_for_selector("body", timeout=TIMEOUT)
+            next(listener)
             is_visible = await self.execute(
                 page,
                 """() => {
@@ -63,11 +72,11 @@ class PlaywrightAdapter:
                 raise Exception("Body not visible")
 
             await self._simulate_user(page)
-            self.handle_listeners(page)
 
             for action in actions:
                 await self.execute(page, action)
 
+            await page.wait_for_timeout(TIMEOUT)
             html = await page.content()
             metadata = {
                 "title": await page.title(),
@@ -85,33 +94,68 @@ class PlaywrightAdapter:
                 metadata=metadata,
                 markdown=None,
                 screenshots=shot_bytes,
+                requests=self._requests,
+                response=self._responses,
             )
         finally:
+            # Ensure generator cleanup even if it was never started.
+            # `next(listener)` may raise StopIteration when the generator ends.
             try:
-                self.handle_listeners(page)
+                next(listener)
             except StopIteration:
                 pass
+            await page.close()
 
     # need to implement custom filters as well
     # best to use a user defined callaback which takes the request and response and returns a value
-    def handle_listeners(self, page: Page):
-        async def _handle_requests():
-            pass
+    def _handle_listeners(self, page: Page):
+        def _handle_requests(request: Request):
+            if not self._network_rule.is_matching(request.url):
+                return
+            # Avoid await request.response() here: it races with navigation/teardown and
+            # can raise TargetClosedError. URL is enough for debug logging.
+            if self._network_rule.log_request:
+                self._logger.info("%s %s", request.method, request.url, tag="REQUEST")
+            self._requests.append(RequestModel(url=request.url, method=request.method, headers=request.headers))
 
-        async def _handle_responses():
-            pass
+        async def _handle_responses(response: Response):
+            if not self._network_rule.is_matching(response.url):
+                return
+            if self._network_rule.log_response:
+                self._logger.info("%s %s", response.url, response.status, tag="RESPONSE")
+            try:
+                body = await response.body()
+            except Exception as e:
+                # Some responses don't have a retrievable body (e.g. race with teardown, caching, redirects).
+                # If this bubbles out of the event callback it can abort the scrape.
+                self._logger.error(
+                    msg="Response body unavailable for "+response.url,
+                    tag="RESPONSE_BODY",
+                    error=str(e),
+                )
+                body = None
 
-        async def _handle_request_failures():
+            self._responses.append(
+                ResponseModel(
+                    url=response.url,
+                    headers=response.headers,
+                    status=response.status,
+                    method=response.request.method,
+                    body=body,
+                )
+            )
+
+        def _handle_request_failures(request: Request):
             pass
 
         page.on("request", _handle_requests)
-        page.on("responses", _handle_responses)
+        page.on("response", _handle_responses)
         page.on("requestfailed", _handle_request_failures)
 
         yield
 
         page.remove_listener("request", _handle_requests)
-        page.remove_listener("responses", _handle_responses)
+        page.remove_listener("response", _handle_responses)
         page.remove_listener("requestfailed", _handle_request_failures)
 
     async def _remove_popups(self, page: Page):
@@ -202,6 +246,7 @@ class PlaywrightAdapter:
         else:
             raise ValueError(f"Invalid action: {action.kind}")
 
+    # helpers
     def _playwright_selector_string(self, sel: Selector) -> str:
         """
         Map a Scout Selector to a Playwright selector string for DOM actions

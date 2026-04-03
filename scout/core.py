@@ -1,19 +1,22 @@
 from dataclasses import dataclass
-from typing import Optional, Literal
-
-
-@dataclass
-class Response:
-    headers: dict
-    body: dict
-    response_code: int
-
+from typing import Optional, Literal, Callable, Any, Awaitable, TypeVar, Union, Pattern
+from playwright.async_api import Request, Response
+import re
 
 @dataclass
-class Request:
+class ResponseModel:
     url: str
     headers: dict
-    response: list[Response]
+    body: Any
+    status: int
+    method: str
+
+
+@dataclass
+class RequestModel:
+    url: str
+    method: str
+    headers: dict
 
 
 @dataclass
@@ -22,10 +25,28 @@ class Session:
 
     pass
 
-
 @dataclass
 class Result:
     request: list[Request]
+
+T = TypeVar("T")
+Handler = Callable[[T],Union[Any, Awaitable[Any]]]
+@dataclass
+class NetworkRule:
+    match_url: Optional[Union[str, Pattern[str]]] = None
+    on_request: Optional[Handler[Request]] = None
+    on_response: Optional[Handler[Response]] = None
+    log_request: bool = True
+    log_response: bool = True
+
+    def is_matching(self, target: Optional[Union[str, Pattern[str]]])-> bool:
+        if self.match_url is None:
+            return True
+        
+        if isinstance(self.match_url, str):
+            return self.match_url == target
+
+        return bool(self.match_url.search(target))
 
 
 @dataclass
@@ -45,6 +66,8 @@ class Document:
     metadata: dict
     markdown: Optional[str]
     screenshots: list[bytes]
+    requests: list[RequestModel]
+    response: list[ResponseModel]
 
     def to_markdown(self):
         pass
