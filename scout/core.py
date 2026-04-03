@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Literal, Callable, Any, Awaitable, TypeVar, Union, Pattern
 from playwright.async_api import Request, Response
-import re
+from html_to_markdown import convert
 
 @dataclass
 class ResponseModel:
@@ -36,8 +36,8 @@ class NetworkRule:
     match_url: Optional[Union[str, Pattern[str]]] = None
     on_request: Optional[Handler[Request]] = None
     on_response: Optional[Handler[Response]] = None
-    log_request: bool = True
-    log_response: bool = True
+    log_request: bool = False
+    log_response: bool = False
 
     def is_matching(self, target: Optional[Union[str, Pattern[str]]])-> bool:
         if self.match_url is None:
@@ -70,7 +70,8 @@ class Document:
     response: list[ResponseModel]
 
     def to_markdown(self):
-        pass
+        self.markdown = convert(self.html)['content']
+        return self.markdown
 
     def extract(self):
         pass
