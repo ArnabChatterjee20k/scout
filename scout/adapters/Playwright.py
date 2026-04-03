@@ -3,12 +3,13 @@ from ..core import Document, Action, Selector, NetworkRule, RequestModel, Respon
 from ..scripts import load_script
 from ..logger import get_logger
 from playwright.async_api import async_playwright, Playwright, Browser, Page, Request, Response
+import inspect
 
 # TODO: add functionality to use and reuse a session via storage_state in playwright
 # TODO: add a way to run js code on the page
 
 # make it dynamic
-TIMEOUT = 3000
+TIMEOUT = 30000
 
 
 class PlaywrightAdapter:
@@ -124,7 +125,15 @@ class PlaywrightAdapter:
             if self._network_rule.log_response:
                 self._logger.info("%s %s", response.url, response.status, tag="RESPONSE")
             try:
-                body = await response.body()
+                body = None
+                if self._network_rule.on_response:
+                    result = self._network_rule.on_response(response)
+                    if inspect.isawaitable(result):
+                        body = await result
+                    else:
+                        body = result
+                else:
+                    body = await response.body()
             except Exception as e:
                 # Some responses don't have a retrievable body (e.g. race with teardown, caching, redirects).
                 # If this bubbles out of the event callback it can abort the scrape.
