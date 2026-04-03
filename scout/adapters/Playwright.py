@@ -1,9 +1,10 @@
-from typing import Any, Optional, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 from ..core import Document, Action, Selector, NetworkRule, RequestModel, ResponseModel
 from ..scripts import load_script
 from ..logger import get_logger
 from playwright.async_api import async_playwright, Playwright, Browser, Page, Request, Response
 import inspect
+import random
 
 # TODO: add functionality to use and reuse a session via storage_state in playwright
 # TODO: add a way to run js code on the page
@@ -11,19 +12,25 @@ import inspect
 # make it dynamic
 TIMEOUT = 30000
 
-
 class PlaywrightAdapter:
     def __init__(self):
         self.playwright: Playwright = None
         self.browser: Browser = None
         self._logger = get_logger("Playwright")
         self.screenshots: list[Union[bytes, str]] = []
+        self._timeout = TIMEOUT
 
         # rules
         self._network_rule = NetworkRule()
 
         self._requests = []
         self._responses = []
+
+    def set_timeout(self, timeout: int = TIMEOUT) -> None:
+        self._timeout = timeout
+
+    def _action_timeout(self, action: Action) -> int:
+        return action.timeout if action.timeout is not None else self._timeout
 
     async def __aenter__(self):
         await self.start()
@@ -51,10 +58,12 @@ class PlaywrightAdapter:
     async def scrape(self, url: str, actions: list[Action] = []):
         self.screenshots = []
         page = await self.browser.new_page()
+        page.set_default_timeout(self._timeout)
+        page.set_default_navigation_timeout(self._timeout)
         listener = self._handle_listeners(page)
         try:
-            nav_response = await page.goto(url)
-            await page.wait_for_selector("body", timeout=TIMEOUT)
+            nav_response = await page.goto(url, timeout=self._timeout)
+            await page.wait_for_selector("body", timeout=self._timeout)
             next(listener)
             is_visible = await self.execute(
                 page,
@@ -67,7 +76,7 @@ class PlaywrightAdapter:
                                         style.opacity !== '0';
                         return isVisible;
                     }""",
-                30000,
+                self._timeout,
             )
             if not is_visible:
                 raise Exception("Body not visible")
@@ -77,7 +86,7 @@ class PlaywrightAdapter:
             for action in actions:
                 await self.execute(page, action)
 
-            await page.wait_for_timeout(TIMEOUT)
+            await page.wait_for_timeout(self._timeout)
             html = await page.content()
             metadata = {
                 "title": await page.title(),
@@ -107,8 +116,6 @@ class PlaywrightAdapter:
                 pass
             await page.close()
 
-    # need to implement custom filters as well
-    # best to use a user defined callaback which takes the request and response and returns a value
     def _handle_listeners(self, page: Page):
         def _handle_requests(request: Request):
             if not self._network_rule.is_matching(request.url):
@@ -154,18 +161,13 @@ class PlaywrightAdapter:
                 )
             )
 
-        def _handle_request_failures(request: Request):
-            pass
-
         page.on("request", _handle_requests)
         page.on("response", _handle_responses)
-        page.on("requestfailed", _handle_request_failures)
 
         yield
 
         page.remove_listener("request", _handle_requests)
         page.remove_listener("response", _handle_responses)
-        page.remove_listener("requestfailed", _handle_request_failures)
 
     async def _remove_popups(self, page: Page):
         remove_popup_js = load_script("remove_popup")
@@ -194,8 +196,41 @@ class PlaywrightAdapter:
                 msg="Failed to remove popups", tag="SCRAPE", error=str(e)
             )
 
-    async def _simulate_user(self, page: Page):
-        pass
+    async def _simulate_user(self, page: Page, interactions: int = 3) -> None:
+        async def _sim_mouse_move() -> None:
+            vp = page.viewport_size
+            if vp:
+                w, h = int(vp["width"]), int(vp["height"])
+            else:
+                size = await page.evaluate(
+                    "() => ({ w: window.innerWidth, h: window.innerHeight })"
+                )
+                w, h = int(size["w"]), int(size["h"])
+            await page.mouse.move(
+                random.randint(0, max(1, w - 1)),
+                random.randint(0, max(1, h - 1)),
+            )
+
+        async def _sim_wheel() -> None:
+            await page.mouse.wheel(0, random.randint(120, 480))
+
+        async def _sim_js_scroll() -> None:
+            await self.execute(
+                page,
+                "() => window.scrollBy(0, Math.floor(120 + Math.random() * 420))",
+            )
+
+        actions: list[Callable[[], Awaitable[None]]] = [
+            _sim_mouse_move,
+            _sim_wheel,
+            _sim_js_scroll,
+        ]
+
+        hi = min(2800, max(200, self._timeout // 5))
+        lo = max(100, min(500, hi // 2))
+        for _ in range(interactions):
+            await random.choice(actions)()
+            await page.wait_for_timeout(random.randint(lo, hi))
 
     def wait(self):
         pass
@@ -213,35 +248,38 @@ class PlaywrightAdapter:
         if action.selector is not None:
             if action.selector.kind == "load_state":
                 await page.wait_for_load_state(
-                    action.selector.value, timeout=action.timeout
+                    action.selector.value, timeout=self._action_timeout(action)
                 )
                 return
             if action.selector.kind == "url":
-                await page.wait_for_url(action.selector.value, timeout=action.timeout)
+                await page.wait_for_url(
+                    action.selector.value, timeout=self._action_timeout(action)
+                )
                 return
 
+        t = self._action_timeout(action)
         if action.kind == "goto":
-            await page.goto(action.value)
+            await page.goto(action.value, timeout=t)
         elif action.kind == "back":
-            await page.back()
+            await page.go_back(timeout=t)
         elif action.kind == "forward":
-            await page.forward()
+            await page.go_forward(timeout=t)
         elif action.kind == "reload":
-            await page.reload()
+            await page.reload(timeout=t)
         elif action.kind == "click":
-            await page.click(self._element_target(action))
+            await page.click(self._element_target(action), timeout=t)
         elif action.kind == "type":
             text = action.value
             if text is None:
                 raise ValueError("type action requires value (text to type)")
-            await page.type(self._element_target(action), text)
+            await page.type(self._element_target(action), text, timeout=t)
         elif action.kind == "press":
             key = action.value
             if key is None:
                 raise ValueError("press action requires value (key name, e.g. Enter)")
-            await page.press(self._element_target(action), key)
+            await page.press(self._element_target(action), key, timeout=t)
         elif action.kind == "hover":
-            await page.hover(self._element_target(action))
+            await page.hover(self._element_target(action), timeout=t)
         elif action.kind == "scroll":
             await page.scroll(action.value)
         elif action.kind == "screenshot":
