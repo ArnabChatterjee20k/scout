@@ -1,0 +1,97 @@
+<!doctype html>
+<!--
+  E2E complex page: consent overlay uses #onetrust-accept-btn-handler so remove_popup.js can dismiss it.
+  Tests assert data-consent on #main-app after accept, hover reveals #hover-tip, scroll reveals #bottom-marker.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scout E2E Complex</title>
+    <style>
+      #consent-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #main-app {
+        padding: 1rem;
+        max-width: 40rem;
+      }
+      #main-app[data-consent="pending"] {
+        filter: blur(2px);
+        pointer-events: none;
+      }
+      #hover-zone {
+        border: 1px solid #333;
+        padding: 0.5rem;
+        margin: 1rem 0;
+      }
+      #hover-tip {
+        display: none;
+        color: green;
+      }
+      #hover-zone:hover #hover-tip {
+        display: block;
+      }
+      .spacer {
+        height: 120vh;
+        background: linear-gradient(#f0f0f0, #e0e0e0);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="consent-overlay" role="dialog" aria-label="Consent">
+      <div>
+        <p>Cookie consent (mock CMP)</p>
+        <label>
+          <input type="checkbox" id="newsletter-opt-in" />
+          Newsletter
+        </label>
+        <button type="button" id="onetrust-accept-btn-handler">Accept All</button>
+      </div>
+    </div>
+
+    <main id="main-app" data-consent="pending">
+      <h1>Complex fixture</h1>
+      <form id="commit-form">
+        <input id="commit" type="text" placeholder="Press Enter" />
+        <p id="commit-status">not-submitted</p>
+      </form>
+
+      <div id="hover-zone">
+        Hover here
+        <span id="hover-tip">tip-visible</span>
+      </div>
+
+      <button type="button" id="aux-btn" data-testid="aux">Aux</button>
+
+      <div class="spacer">scroll spacer</div>
+      <p id="bottom-marker">bottom-reached</p>
+    </main>
+
+    <script>
+      document
+        .getElementById("onetrust-accept-btn-handler")
+        .addEventListener("click", function () {
+          document.getElementById("consent-overlay").style.display = "none";
+          var main = document.getElementById("main-app");
+          main.setAttribute("data-consent", "accepted");
+          main.style.filter = "";
+          main.style.pointerEvents = "";
+        });
+
+      document.getElementById("commit-form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        document.getElementById("commit-status").textContent = "submitted-enter";
+      });
+
+      document.getElementById("hover-zone").addEventListener("mouseenter", function () {
+        document.body.setAttribute("data-hovered", "true");
+      });
+    </script>
+  </body>
+</html>

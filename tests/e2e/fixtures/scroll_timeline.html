@@ -1,0 +1,107 @@
+<!doctype html>
+<!--
+  Nested layouts + scrollable feed of time rows. More rows append when the inner
+  #feed scroll position nears the bottom (infinite-list style). E2E tests scroll
+  repeatedly and merge collected items into data-collected on body.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scroll Timeline Layouts</title>
+    <style>
+      .layout-app {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        padding: 8px;
+      }
+      .layout-sidebar-main {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 12px;
+        flex: 1;
+        min-height: 0;
+      }
+      .layout-main-inner {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        overflow: hidden;
+        min-height: 0;
+      }
+      #feed {
+        height: 100px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 8px;
+        background: #fafafa;
+      }
+      .time-entry {
+        min-height: 44px;
+        padding: 8px;
+        margin-bottom: 8px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout-app" data-layout="app">
+      <header><strong>Schedule</strong></header>
+      <div class="layout-sidebar-main" data-layout="sidebar-main">
+        <aside>Nav</aside>
+        <div class="layout-main-inner" data-layout="main-inner">
+          <div id="feed" role="feed" aria-label="Time slots">
+            <ul id="time-list" style="list-style: none; margin: 0; padding: 0"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var allTimes = [
+          "09:00",
+          "09:15",
+          "09:30",
+          "09:45",
+          "10:00",
+          "10:15",
+          "10:30",
+          "10:45",
+          "11:00",
+          "11:15",
+          "11:30",
+          "11:45",
+        ];
+        var batchSize = 3;
+        var rendered = 0;
+        var list = document.getElementById("time-list");
+        var feed = document.getElementById("feed");
+
+        function appendBatch() {
+          var end = Math.min(rendered + batchSize, allTimes.length);
+          for (var i = rendered; i < end; i++) {
+            var li = document.createElement("li");
+            li.className = "time-entry";
+            li.dataset.time = allTimes[i];
+            li.textContent = allTimes[i] + " — slot " + (i + 1);
+            list.appendChild(li);
+          }
+          rendered = end;
+        }
+
+        function onScroll() {
+          if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 24) {
+            appendBatch();
+          }
+        }
+
+        feed.addEventListener("scroll", onScroll);
+        appendBatch();
+      })();
+    </script>
+  </body>
+</html>

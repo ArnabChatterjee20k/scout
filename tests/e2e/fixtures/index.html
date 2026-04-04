@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scout E2E</title>
+  </head>
+  <body>
+    <h1 id="title">Scout E2E</h1>
+    <input id="name" placeholder="Your name" />
+    <button id="submit">Submit</button>
+    <p id="output">ready</p>
+    <a id="next" href="/next.html">Next</a>
+
+    <script>
+      document.getElementById("submit").addEventListener("click", () => {
+        const value = document.getElementById("name").value;
+        document.getElementById("output").textContent = `Hello ${value}`;
+      });
+    </script>
+  </body>
+</html>

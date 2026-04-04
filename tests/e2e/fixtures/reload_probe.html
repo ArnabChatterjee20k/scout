@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Reload Probe</title>
+  </head>
+  <body>
+    <p id="reload-count" data-reload-count="0">reload</p>
+    <script>
+      (function () {
+        const k = "scout_e2e_reload_count" + location.search;
+        const n = parseInt(sessionStorage.getItem(k) || "0", 10) + 1;
+        sessionStorage.setItem(k, String(n));
+        const el = document.getElementById("reload-count");
+        el.setAttribute("data-reload-count", String(n));
+        el.textContent = "count=" + n;
+      })();
+    </script>
+  </body>
+</html>

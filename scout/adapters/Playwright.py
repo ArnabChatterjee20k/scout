@@ -337,7 +337,11 @@ class PlaywrightAdapter:
         elif action.kind == "hover":
             await page.hover(self._element_target(action), timeout=t)
         elif action.kind == "scroll":
-            await page.scroll(action.value)
+            if action.value is None:
+                raise ValueError(
+                    "scroll action requires value (vertical wheel delta as a number, e.g. '800')"
+                )
+            await page.mouse.wheel(0, float(action.value.strip()))
         elif action.kind == "screenshot":
             if action.value:
                 await page.screenshot(path=action.value)

@@ -12,4 +12,15 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black>=26.3.1",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.2.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"
+asyncio_mode = "auto"
+markers = [
+    "e2e: end-to-end tests",
 ]

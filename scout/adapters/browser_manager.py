@@ -176,7 +176,7 @@ class BrowserManager:
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-breakpad",
-            # "--headless=new",
+            "--headless=new",
         ]
 
         self._logger.info(
