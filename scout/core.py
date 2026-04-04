@@ -3,6 +3,7 @@ from typing import Optional, Literal, Callable, Any, Awaitable, TypeVar, Union, 
 from playwright.async_api import Request, Response
 from html_to_markdown import convert
 
+
 @dataclass
 class ResponseModel:
     url: str
@@ -25,12 +26,16 @@ class Session:
 
     pass
 
+
 @dataclass
 class Result:
     request: list[Request]
 
+
 T = TypeVar("T")
-Handler = Callable[[T],Union[Any, Awaitable[Any]]]
+Handler = Callable[[T], Union[Any, Awaitable[Any]]]
+
+
 @dataclass
 class NetworkRule:
     match_url: Optional[Union[str, Pattern[str]]] = None
@@ -39,10 +44,10 @@ class NetworkRule:
     log_request: bool = False
     log_response: bool = False
 
-    def is_matching(self, target: Optional[Union[str, Pattern[str]]])-> bool:
+    def is_matching(self, target: Optional[Union[str, Pattern[str]]]) -> bool:
         if self.match_url is None:
             return True
-        
+
         if isinstance(self.match_url, str):
             return self.match_url == target
 
@@ -70,7 +75,7 @@ class Document:
     response: list[ResponseModel]
 
     def to_markdown(self):
-        self.markdown = convert(self.html)['content']
+        self.markdown = convert(self.html)["content"]
         return self.markdown
 
     def extract(self):

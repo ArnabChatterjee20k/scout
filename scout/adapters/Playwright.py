@@ -2,7 +2,14 @@ from typing import Any, Awaitable, Callable, Optional, Union
 from ..core import Document, Action, Selector, NetworkRule, RequestModel, ResponseModel
 from ..scripts import load_script
 from ..logger import get_logger
-from playwright.async_api import async_playwright, Playwright, Browser, Page, Request, Response
+from playwright.async_api import (
+    Playwright,
+    Browser,
+    Page,
+    Request,
+    Response,
+    async_playwright,
+)
 import inspect
 import random
 
@@ -12,10 +19,15 @@ import random
 # make it dynamic
 TIMEOUT = 30000
 
+
 class PlaywrightAdapter:
-    def __init__(self):
-        self.playwright: Playwright = None
-        self.browser: Browser = None
+    def __init__(
+        self,
+        browser_cdp_endpoint: str | None = None,
+    ):
+        self._browser_cdp_endpoint = browser_cdp_endpoint
+        self._playwright: Playwright | None = None
+        self.browser: Browser | None = None
         self._logger = get_logger("Playwright")
         self.screenshots: list[Union[bytes, str]] = []
         self._timeout = TIMEOUT
@@ -30,6 +42,12 @@ class PlaywrightAdapter:
     def set_timeout(self, timeout: int = TIMEOUT) -> None:
         self._timeout = timeout
 
+    @property
+    def playwright(self) -> Playwright:
+        if self._playwright is None:
+            raise RuntimeError("PlaywrightAdapter is not started")
+        return self._playwright
+
     def _action_timeout(self, action: Action) -> int:
         return action.timeout if action.timeout is not None else self._timeout
 
@@ -42,28 +60,51 @@ class PlaywrightAdapter:
         # Do not suppress exceptions from inside `async with`.
         # Returning a truthy value would swallow errors and make `scrape()` look like it returned None.
         return False
-    
+
     # rules
     def set_network_rule(self, rule: NetworkRule):
         self._network_rule = rule
 
+    def set_cdp_endpoint(self, browser_cdp_endpoint: str):
+        self._browser_cdp_endpoint = browser_cdp_endpoint
+
     # interaction methods
     async def start(self):
-        self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=False)
+        self._playwright = await async_playwright().start()
+        if not self._browser_cdp_endpoint:
+            raise ValueError("browser_cdp_endpoint is required")
+        self.browser = await self._playwright.chromium.connect_over_cdp(
+            self._browser_cdp_endpoint
+        )
 
     async def stop(self):
-        await self.browser.close()
+        if self._playwright is not None:
+            try:
+                await self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
+        self.browser = None
         return self
+
+    async def _new_page(self) -> Page:
+        assert self.browser is not None
+        if self.browser.contexts:
+            context = self.browser.contexts[0]
+        else:
+            context = await self.browser.new_context()
+        return await context.new_page()
 
     async def scrape(self, url: str, actions: list[Action] = []):
         self.screenshots = []
-        page = await self.browser.new_page()
+        page = await self._new_page()
         page.set_default_timeout(self._timeout)
         page.set_default_navigation_timeout(self._timeout)
         listener = self._handle_listeners(page)
         try:
-            nav_response = await page.goto(url, wait_until="domcontentloaded", timeout=self._url_timeout)
+            nav_response = await page.goto(
+                url, wait_until="domcontentloaded", timeout=self._url_timeout
+            )
             await page.wait_for_selector("body", timeout=self._timeout)
             next(listener)
             is_visible = await self.execute(
@@ -81,7 +122,7 @@ class PlaywrightAdapter:
             )
             if not is_visible:
                 raise Exception("Body not visible")
-            
+
             await page.wait_for_timeout(500)
             await self._remove_popups(page)
             await self._simulate_user(page)
@@ -90,7 +131,7 @@ class PlaywrightAdapter:
                 try:
                     await self.execute(page, action)
                 except Exception as e:
-                    self._logger.error(msg= action.kind, error=str(e), tag=f"ACTION")
+                    self._logger.error(msg=action.kind, error=str(e), tag=f"ACTION")
 
             await page.wait_for_timeout(self._timeout)
             html = await page.content()
@@ -120,7 +161,11 @@ class PlaywrightAdapter:
                 next(listener)
             except StopIteration:
                 pass
-            await page.close()
+            # Not closing the page as it might be interfered through the cdp by other processes
+            # actions are already performed on this page
+            # other way would would be storing all the actions in a cache with session-id
+            # then repeat/replay those actions via session id on the separate process to get the same state
+            # await page.close()
 
     def _handle_listeners(self, page: Page):
         def _handle_requests(request: Request):
@@ -130,13 +175,19 @@ class PlaywrightAdapter:
             # can raise TargetClosedError. URL is enough for debug logging.
             if self._network_rule.log_request:
                 self._logger.info("%s %s", request.method, request.url, tag="REQUEST")
-            self._requests.append(RequestModel(url=request.url, method=request.method, headers=request.headers))
+            self._requests.append(
+                RequestModel(
+                    url=request.url, method=request.method, headers=request.headers
+                )
+            )
 
         async def _handle_responses(response: Response):
             if not self._network_rule.is_matching(response.url):
                 return
             if self._network_rule.log_response:
-                self._logger.info("%s %s", response.url, response.status, tag="RESPONSE")
+                self._logger.info(
+                    "%s %s", response.url, response.status, tag="RESPONSE"
+                )
             try:
                 body = None
                 if self._network_rule.on_response:
@@ -151,7 +202,7 @@ class PlaywrightAdapter:
                 # Some responses don't have a retrievable body (e.g. race with teardown, caching, redirects).
                 # If this bubbles out of the event callback it can abort the scrape.
                 self._logger.error(
-                    msg="Response body unavailable for "+response.url,
+                    msg="Response body unavailable for " + response.url,
                     tag="RESPONSE_BODY",
                     error=str(e),
                 )
