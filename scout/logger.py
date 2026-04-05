@@ -46,7 +46,7 @@ def get_logger(name: str = "app") -> logging.Logger:
     handler.setLevel(level)
 
     formatter = SafeFormatter(
-        fmt="[%(asctime)s] | [%(levelname)s] | [%(tag)s] | %(message)s",
+        fmt="[%(name)s] | [%(asctime)s] | [%(levelname)s] | [%(tag)s] | %(message)s",
         datefmt="%H:%M:%S",
     )
 
