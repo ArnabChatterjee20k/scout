@@ -119,7 +119,6 @@ class Scout:
         self,
         query: str,
         *,
-        output_dir: Path | str | None = None,
         agent_config: BrowserAgentConfig | None = None,
     ) -> BrowserAgentResult:
         cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
@@ -137,14 +136,8 @@ class Scout:
 
         snapshot = result.stdout
 
-        od: Path | None = None
-        if output_dir is not None:
-            od = Path(output_dir).expanduser().resolve()
-        elif agent_config is not None and agent_config.output_dir is not None:
-            od = Path(agent_config.output_dir).expanduser().resolve()
         return await execute(
             query=query,
             deps=Deps(cdp_endpoint=cdp_endpoint, page_snapshot=snapshot),
-            output_dir=od,
             config=agent_config,
         )

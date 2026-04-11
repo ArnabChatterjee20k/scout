@@ -362,27 +362,23 @@ async def execute(
     query: str,
     deps: Deps,
     *,
-    output_dir: Path | None = None,
     config: BrowserAgentConfig | None = None,
 ) -> BrowserAgentResult:
     """
     Run the agent until the model returns a final text answer (no more tool calls),
     or until usage limits are exceeded (then ``UsageLimitExceeded`` is handled).
 
-    ``output_dir`` overrides :attr:`BrowserAgentConfig.output_dir` when both are set.
-    Otherwise ``file_tool`` uses ``config.output_dir`` or the default under ``./scout_agent_output``.
-    Use :class:`BrowserAgentConfig` for output path, ``max_model_requests``, HTTP retries, or a different model.
+    ``file_tool`` writes under :attr:`BrowserAgentConfig.output_dir` when set; otherwise
+    :attr:`Deps.output_dir` (default ``./scout_agent_output``). Use :class:`BrowserAgentConfig`
+    for output path, ``max_model_requests``, HTTP retries, or a different model.
 
     Returns a :class:`BrowserAgentResult` with ``output`` set to the model's final string.
     """
     cfg = config or BrowserAgentConfig()
-    resolved_out: Path | None = None
-    if output_dir is not None:
-        resolved_out = Path(output_dir).expanduser().resolve()
-    elif cfg.output_dir is not None:
-        resolved_out = Path(cfg.output_dir).expanduser().resolve()
-    if resolved_out is not None:
-        deps = replace(deps, output_dir=resolved_out)
+    if cfg.output_dir is not None:
+        deps = replace(
+            deps, output_dir=Path(cfg.output_dir).expanduser().resolve()
+        )
     deps.output_dir.mkdir(parents=True, exist_ok=True)
 
     prompt = f"""
