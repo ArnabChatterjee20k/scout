@@ -376,9 +376,7 @@ async def execute(
     """
     cfg = config or BrowserAgentConfig()
     if cfg.output_dir is not None:
-        deps = replace(
-            deps, output_dir=Path(cfg.output_dir).expanduser().resolve()
-        )
+        deps = replace(deps, output_dir=Path(cfg.output_dir).expanduser().resolve())
     deps.output_dir.mkdir(parents=True, exist_ok=True)
 
     prompt = f"""

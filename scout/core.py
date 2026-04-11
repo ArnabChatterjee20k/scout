@@ -1,7 +1,18 @@
 from dataclasses import dataclass
-from typing import Optional, Literal, Callable, Any, Awaitable, TypeVar, Union, Pattern
+from typing import (
+    Optional,
+    Literal,
+    Callable,
+    Any,
+    Awaitable,
+    Type,
+    TypeVar,
+    Union,
+    Pattern,
+)
 from playwright.async_api import Request, Response
 from html_to_markdown import convert
+from pydantic import BaseModel
 
 
 @dataclass
@@ -78,14 +89,38 @@ class Document:
         self.markdown = convert(self.html)["content"]
         return self.markdown
 
-    def extract(self):
-        pass
+    def extract(self, schema: list[ExtractionSchema]) -> list[ExtractionResult]:
+        from .html_parser import HTMLParser
 
-    def extract_with_llm(self):
-        pass
+        parser = HTMLParser(self.html)
+        result: list[ExtractionResult] = []
+        for extraction_schema in schema:
+            value = parser.get(
+                kind=extraction_schema.selector.kind,
+                value=extraction_schema.selector.value,
+                attr=extraction_schema.attr,
+            )
+            result.append(
+                ExtractionResult(
+                    field=extraction_schema.field,
+                    selector=extraction_schema.selector,
+                    attr=extraction_schema.attr,
+                    value=value,
+                )
+            )
+        return result
+
+    async def extract_with_agent(self, query: str, schema: Type[BaseModel]):
+        from .agents.extraction_agent import extract
+
+        md = self.markdown
+        if md is None:
+            md = self.to_markdown()
+        return await extract(md, schema, query)
 
 
 SELECTOR_KIND = Literal["css", "xpath", "text", "url", "load_state", "tag"]
+EXTRACTION_SELECTOR_KIND = Literal["css", "xpath", "text", "tag"]
 
 
 @dataclass(frozen=True)
@@ -104,6 +139,26 @@ class Selector:
 
     kind: SELECTOR_KIND
     value: str
+
+
+@dataclass(frozen=True)
+class ExtractionSelector:
+    kind: EXTRACTION_SELECTOR_KIND
+    value: str
+
+
+@dataclass(frozen=True)
+class ExtractionSchema:
+    field: str
+    selector: ExtractionSelector
+    attr: Optional[str] = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class ExtractionResult(ExtractionSchema):
+    """Result of :meth:`Document.extract`; ``value`` holds parser output (e.g. list of strings)."""
+
+    value: Any
 
 
 ACTION_TYPE = Literal[
