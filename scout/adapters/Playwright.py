@@ -201,11 +201,12 @@ class PlaywrightAdapter:
             except Exception as e:
                 # Some responses don't have a retrievable body (e.g. race with teardown, caching, redirects).
                 # If this bubbles out of the event callback it can abort the scrape.
-                self._logger.error(
-                    msg="Response body unavailable for " + response.url,
-                    tag="RESPONSE_BODY",
-                    error=str(e),
-                )
+                if self._network_rule.log_response:
+                    self._logger.error(
+                        msg="Response body unavailable for " + response.url,
+                        tag="RESPONSE_BODY",
+                        error=str(e),
+                    )
                 body = None
 
             self._responses.append(

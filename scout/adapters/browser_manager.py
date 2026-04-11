@@ -46,7 +46,7 @@ class BrowserManagerConfig:
 
     cdp_endpoint: Optional[str] = None
     headless: bool = True
-    """Always run in headless mode."""
+    """If True, Chromium runs with ``--headless=new`` (no UI). If False, a visible (headed) window is used."""
     remote_debugging_port: int = DEFAULT_DEBUG_PORT
     """Port for remote debugging (default: 9092, or pass custom port)."""
     remote_debugging_address: str = DEFAULT_DEBUG_HOST
@@ -176,11 +176,13 @@ class BrowserManager:
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-breakpad",
-            "--headless=new",
         ]
+        if self.config.headless:
+            args.append("--headless=new")
 
+        mode = "headless" if self.config.headless else "headed"
         self._logger.info(
-            f"Launching Chromium (headless) with port={port} host={self.config.remote_debugging_address}",
+            f"Launching Chromium ({mode}) with port={port} host={self.config.remote_debugging_address}",
             tag="CDP",
         )
         self._process = subprocess.Popen(
