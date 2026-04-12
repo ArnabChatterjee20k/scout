@@ -45,8 +45,9 @@ class BrowserManagerConfig:
     """If ``cdp_endpoint`` is set, the manager only attaches and does not spawn a process."""
 
     cdp_endpoint: Optional[str] = None
-    headless: bool = True
-    """If True, Chromium runs with ``--headless=new`` (no UI). If False, a visible (headed) window is used."""
+    headless: bool = False
+    """If True, Chromium runs with ``--headless=new`` (no UI). If False, a normal visible window is used.
+    Ignored when ``cdp_endpoint`` is set: headless/headed is whatever the remote browser was launched with."""
     remote_debugging_port: int = DEFAULT_DEBUG_PORT
     """Port for remote debugging (default: 9092, or pass custom port)."""
     remote_debugging_address: str = DEFAULT_DEBUG_HOST
@@ -73,6 +74,10 @@ class BrowserManager:
         # HTTP CDP port (launch mode, or parsed from attach URL when present)
         self._debugging_port: Optional[int] = None
         self._websocket_debugger_url: Optional[str] = None
+
+    @property
+    def started(self) -> bool:
+        return self._browser is not None
 
     @property
     def playwright(self) -> Playwright:

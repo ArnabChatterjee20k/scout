@@ -10,7 +10,7 @@ from scout.core import Action, Selector
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_browser_manager_exposes_cdp_endpoints() -> None:
-    config = BrowserManagerConfig(cdp_ready_timeout_s=20.0)
+    config = BrowserManagerConfig(cdp_ready_timeout_s=20.0, headless=True)
 
     async with BrowserManager(config) as manager:
         assert manager.cdp_url is not None
@@ -25,7 +25,7 @@ async def test_browser_manager_exposes_cdp_endpoints() -> None:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_playwright_adapter_can_scrape_with_cdp(e2e_server_url: str) -> None:
-    config = BrowserManagerConfig(cdp_ready_timeout_s=20.0)
+    config = BrowserManagerConfig(cdp_ready_timeout_s=20.0, headless=True)
 
     async with BrowserManager(config) as manager:
         endpoint = await manager.get_websocket_debugger_url() or manager.cdp_url

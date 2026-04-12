@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from scout.adapters.browser_manager import BrowserManagerConfig
 from scout.scout import Scout
 
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -48,5 +49,7 @@ def e2e_server_url(e2e_site_dir: Path) -> str:
 
 @pytest.fixture
 async def scout_instance() -> Scout:
-    async with Scout().start() as scout:
+    async with Scout(
+        browser_config=BrowserManagerConfig(headless=True),
+    ).start() as scout:
         yield scout
