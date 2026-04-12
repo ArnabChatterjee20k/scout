@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     Optional,
     Literal,
@@ -188,3 +188,68 @@ class Action:
     wait_for_load_state: Optional[
         Literal["load", "domcontentloaded", "networkidle"]
     ] = None
+    # (result, page_url) after a successful execute(); may return an awaitable.
+    on_complete: Optional[Callable[[Any, str], Any]] = None
+    # (error, page_url) when execute() raises; may return an awaitable. Errors are still logged.
+    on_error: Optional[Callable[[BaseException, str], Any]] = None
+
+
+@dataclass
+class Include:
+    actions: list[Action] = field(default_factory=list)
+    pattern: Optional[Union[str, Pattern[str]]] = None
+
+
+@dataclass
+class CrawlConfig:
+    include: Optional[list[Union[Include, dict, str, Pattern[str]]]] = field(
+        default_factory=list
+    )
+    exclude: Optional[list[Union[str, Pattern[str]]]] = field(default_factory=list)
+    page_limit: int = 5
+    max_depth: int = 10
+    concurrency: int = 1
+
+    # just for caching the included list post init
+    _normalized_include: list["Include"] = field(
+        init=False, repr=False, default_factory=list
+    )
+
+    def __post_init__(self):
+        self._normalized_include = [
+            self._normalize_include(i) for i in (self.include or [])
+        ]
+
+    def _normalize_include(
+        self, value: Union[Include, dict, str, Pattern[str]]
+    ) -> "Include":
+        if isinstance(value, Include):
+            return value
+        if isinstance(value, str):
+            return Include(pattern=value)
+        # regex
+        if hasattr(value, "search"):
+            return Include(pattern=value)
+        return Include(**value)
+
+    def is_included(self, target: str):
+        for exclude in self.exclude:
+            if isinstance(exclude, str) and exclude == target:
+                return False
+
+            if hasattr(exclude, "search") and exclude.search(target):
+                return False
+
+        if not self._normalized_include:
+            return True
+
+        for include in self._normalized_include:
+            pattern = include.pattern
+
+            if isinstance(pattern, str) and pattern == target:
+                return True
+
+            if hasattr(pattern, "search") and pattern.search(target):
+                return True
+
+        return False

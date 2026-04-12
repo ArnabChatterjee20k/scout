@@ -127,19 +127,26 @@ async def test_action_click_with_selector_kinds(
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_action_type_and_screenshot(scout_instance, e2e_server_url: str) -> None:
+    shots: list[bytes] = []
     doc = await scout_instance.set_timeout(E2E_TIMEOUT_MS).scrape(
         f"{e2e_server_url}/index.html",
         [
             Action(
                 kind="type", selector=Selector(kind="css", value="#name"), value="Ada"
             ),
-            Action(kind="screenshot", selector=None, value=None),
+            Action(
+                kind="screenshot",
+                selector=None,
+                value=None,
+                on_complete=lambda png, _url: shots.append(png),
+            ),
         ],
     )
     assert_http_ok(doc)
     assert "Ada" in doc.html or "ready" in doc.html
-    assert len(doc.screenshots) == 1
-    assert isinstance(doc.screenshots[0], bytes)
+    assert doc.screenshots == []
+    assert len(shots) == 1
+    assert isinstance(shots[0], bytes)
 
 
 @pytest.mark.e2e
@@ -207,15 +214,27 @@ async def test_action_scroll_then_run_js_scroll_y(
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_action_screenshot_twice(scout_instance, e2e_server_url: str) -> None:
+    shots: list[bytes] = []
     doc = await scout_instance.set_timeout(E2E_TIMEOUT_MS).scrape(
         f"{e2e_server_url}/index.html",
         [
-            Action(kind="screenshot", selector=None, value=None),
-            Action(kind="screenshot", selector=None, value=None),
+            Action(
+                kind="screenshot",
+                selector=None,
+                value=None,
+                on_complete=lambda png, _url: shots.append(png),
+            ),
+            Action(
+                kind="screenshot",
+                selector=None,
+                value=None,
+                on_complete=lambda png, _url: shots.append(png),
+            ),
         ],
     )
-    assert len(doc.screenshots) == 2
-    assert all(isinstance(s, bytes) for s in doc.screenshots)
+    assert doc.screenshots == []
+    assert len(shots) == 2
+    assert all(isinstance(s, bytes) for s in shots)
 
 
 @pytest.mark.e2e

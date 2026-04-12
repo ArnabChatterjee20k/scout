@@ -1,10 +1,9 @@
 from .adapters.Playwright import PlaywrightAdapter, Response, TIMEOUT
-from .core import Action
+from .core import Action, CrawlConfig
 from .adapters.browser_manager import BrowserManager, BrowserManagerConfig
 from contextlib import asynccontextmanager
-import json
-import subprocess
-from pathlib import Path
+import json, subprocess
+from asyncio.queues import Queue
 
 from .agents.browser_agent import BrowserAgentConfig, BrowserAgentResult, Deps, execute
 from .logger import get_logger
@@ -112,8 +111,10 @@ class Scout:
         async with self._crawler as crawler:
             return await crawler.scrape(url, actions)
 
-    def crawl(self):
-        pass
+    async def crawl(self, url: str, config: CrawlConfig):
+        queue = Queue(config.page_limit * config.max_depth)
+        async with self._crawler as crawler:
+            doc = await crawler.scrape(url)
 
     async def interact(
         self,

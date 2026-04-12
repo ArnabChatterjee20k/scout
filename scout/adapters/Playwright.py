@@ -29,7 +29,6 @@ class PlaywrightAdapter:
         self._playwright: Playwright | None = None
         self.browser: Browser | None = None
         self._logger = get_logger("Playwright")
-        self.screenshots: list[Union[bytes, str]] = []
         self._timeout = TIMEOUT
         self._url_timeout = TIMEOUT
 
@@ -96,7 +95,6 @@ class PlaywrightAdapter:
         return await context.new_page()
 
     async def scrape(self, url: str, actions: list[Action] = []):
-        self.screenshots = []
         page = await self._new_page()
         page.set_default_timeout(self._timeout)
         page.set_default_navigation_timeout(self._timeout)
@@ -129,8 +127,16 @@ class PlaywrightAdapter:
 
             for action in actions:
                 try:
-                    await self.execute(page, action)
+                    result = await self.execute(page, action)
+                    if action.on_complete is not None:
+                        maybe = action.on_complete(result, page.url)
+                        if inspect.isawaitable(maybe):
+                            await maybe
                 except Exception as e:
+                    if action.on_error is not None:
+                        maybe = action.on_error(e, page.url)
+                        if inspect.isawaitable(maybe):
+                            await maybe
                     self._logger.error(msg=action.kind, error=str(e), tag=f"ACTION")
 
             await page.wait_for_timeout(self._timeout)
@@ -142,15 +148,13 @@ class PlaywrightAdapter:
                 "headers": dict(nav_response.headers) if nav_response else {},
                 "cookies": await page.context.cookies(),
                 "storage": await page.context.storage_state(),
-                "screenshots": self.screenshots,
             }
-            shot_bytes = [s for s in self.screenshots if isinstance(s, bytes)]
             return Document(
                 url=url,
                 html=html,
                 metadata=metadata,
                 markdown=None,
-                screenshots=shot_bytes,
+                screenshots=[],
                 requests=self._requests,
                 response=self._responses,
             )
@@ -316,41 +320,42 @@ class PlaywrightAdapter:
 
         t = self._action_timeout(action)
         if action.kind == "goto":
-            await page.goto(action.value, timeout=t)
+            return await page.goto(action.value, timeout=t)
         elif action.kind == "back":
-            await page.go_back(timeout=t)
+            return await page.go_back(timeout=t)
         elif action.kind == "forward":
-            await page.go_forward(timeout=t)
+            return await page.go_forward(timeout=t)
         elif action.kind == "reload":
-            await page.reload(timeout=t)
+            return await page.reload(timeout=t)
         elif action.kind == "click":
             await page.click(self._element_target(action), timeout=t)
+            return None
         elif action.kind == "type":
             text = action.value
             if text is None:
                 raise ValueError("type action requires value (text to type)")
             await page.type(self._element_target(action), text, timeout=t)
+            return None
         elif action.kind == "press":
             key = action.value
             if key is None:
                 raise ValueError("press action requires value (key name, e.g. Enter)")
             await page.press(self._element_target(action), key, timeout=t)
+            return None
         elif action.kind == "hover":
             await page.hover(self._element_target(action), timeout=t)
+            return None
         elif action.kind == "scroll":
             if action.value is None:
                 raise ValueError(
                     "scroll action requires value (vertical wheel delta as a number, e.g. '800')"
                 )
             await page.mouse.wheel(0, float(action.value.strip()))
+            return None
         elif action.kind == "screenshot":
-            if action.value:
-                await page.screenshot(path=action.value)
-                self.screenshots.append(action.value)
-            else:
-                self.screenshots.append(await page.screenshot())
+            return await page.screenshot()
         elif action.kind == "run_js_code":
-            await page.evaluate(action.value)
+            return await page.evaluate(action.value)
         else:
             raise ValueError(f"Invalid action: {action.kind}")
 

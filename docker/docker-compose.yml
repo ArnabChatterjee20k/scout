@@ -1,0 +1,29 @@
+# Agent-browser in Docker attaching to Chrome CDP on the host
+#
+# Why `agent-browser --cdp http://host.docker.internal:9222` fails:
+#   `--cdp` only accepts (1) a port number → http://127.0.0.1:PORT inside the container, or
+#   (2) a full WebSocket URL (ws://... or wss://...). An http:// URL is not used as-is, so
+#   the CLI falls back to probing 127.0.0.1:9222 (connection refused from the container).
+#
+# Chrome on the host must listen on all interfaces or the container cannot reach it:
+#   macOS/Linux example:
+#     google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0
+#   (or Chromium with the same flags)
+#
+# From inside the container, get the browser WebSocket URL and rewrite localhost → host:
+#   PORT=58843   # your --remote-debugging-port
+#   WS=$(curl -sS "http://host.docker.internal:${PORT}/json/version" | jq -r .webSocketDebuggerUrl | sed 's/127.0.0.1/host.docker.internal/g')
+#   agent-browser --cdp "$WS" snapshot
+# Without jq (Node is always in this image):
+#   WS=$(curl -sS "http://host.docker.internal:${PORT}/json/version" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).webSocketDebuggerUrl.replace(/127\\.0\\.0\\.1/g,'host.docker.internal')")
+#
+services:
+  agent-browser:
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    working_dir: /app
+    stdin_open: true
+    tty: true

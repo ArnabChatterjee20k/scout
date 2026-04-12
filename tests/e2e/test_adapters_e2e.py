@@ -35,20 +35,36 @@ async def test_playwright_adapter_can_scrape_with_cdp(e2e_server_url: str) -> No
         adapter.set_cdp_endpoint(endpoint)
         adapter.set_timeout(1200)
 
+        hooks: list[tuple[str, object, str]] = []
+
         async with adapter:
             doc = await adapter.scrape(
                 f"{e2e_server_url}/index.html",
                 actions=[
-                    Action(kind="screenshot", selector=None, value=None),
                     Action(
-                        kind="run_js_code", selector=None, value="() => document.title"
+                        kind="screenshot",
+                        selector=None,
+                        value=None,
+                        on_complete=lambda r, u: hooks.append(("screenshot", r, u)),
+                    ),
+                    Action(
+                        kind="run_js_code",
+                        selector=None,
+                        value="() => document.title",
+                        on_complete=lambda r, u: hooks.append(("run_js", r, u)),
                     ),
                 ],
             )
 
     assert doc.metadata["title"] == "Scout E2E"
+    assert "screenshots" not in doc.metadata
+    assert "action_results" not in doc.metadata
+    assert len(hooks) == 2
+    assert hooks[0][0] == "screenshot"
+    assert hooks[1][0] == "run_js"
+    assert hooks[1][1] == "Scout E2E"
+    assert all(h[2].rstrip("/").endswith("index.html") for h in hooks)
     assert doc.metadata["status"] == 200
-    assert isinstance(doc.screenshots, list)
-    assert len(doc.screenshots) == 1
-    assert isinstance(doc.screenshots[0], bytes)
+    assert isinstance(hooks[0][1], bytes) and len(hooks[0][1]) > 0
+    assert doc.screenshots == []
     assert 'id="title"' in doc.html

@@ -1,0 +1,146 @@
+- generic [ref=e1] clickable [onclick]
+  - generic
+    - generic
+      - generic
+        - link "Skip to main content" [ref=e3]
+          - StaticText "Skip to main content"
+        - link "Spotify" [ref=e4]
+          - image "Spotify"
+        - button "Home" [ref=e5]
+        - search
+          - button "Search" [ref=e33]
+          - combobox "What do you want to play?" [expanded=false, ref=e17]
+          - button "Browse" [ref=e38]
+        - button "Premium" [ref=e6]
+        - button "Support" [ref=e7]
+        - button "Download" [ref=e8]
+        - link "Install App" [ref=e9]
+          - StaticText "Install App"
+        - generic
+          - button "Sign up" [ref=e13]
+          - button "Log in" [ref=e14]
+            - StaticText "Log in"
+      - generic
+        - navigation "Main" [ref=e10]
+          - generic
+            - generic
+              - sectionheader
+                - heading "Your Library" [level=1, ref=e39]
+                - button "Create" [ref=e40]
+              - generic
+                - generic
+                  - StaticText "Create your first playlist"
+                  - StaticText "It’s easy, we’ll help you"
+                  - button "Create playlist" [ref=e63]
+                    - StaticText "Create playlist"
+                - generic
+                  - StaticText "Let’s find some podcasts to follow"
+                  - StaticText "We’ll keep you updated on new episodes"
+                  - link "Browse podcasts" [ref=e64]
+                    - StaticText "Browse podcasts"
+                - grid "Your Library"
+                  - row
+                  - row
+            - link "Legal" [ref=e18]
+              - StaticText "Legal"
+            - link "Safety & Privacy Center" [ref=e19]
+              - StaticText "Safety & Privacy Center"
+            - link "Privacy Policy" [ref=e20]
+              - StaticText "Privacy Policy"
+            - link "Cookies" [ref=e21]
+              - StaticText "Cookies"
+            - link "About Ads" [ref=e22]
+              - StaticText "About Ads"
+            - link "Accessibility" [ref=e23]
+              - StaticText "Accessibility"
+            - link "Cookies" [ref=e24]
+            - button "English" [ref=e34]
+        - LabelText
+          - StaticText "Resize main navigation"
+          - slider "Resize main navigation" [ref=e25]: 280
+      - complementary "Now playing bar"
+        - generic [ref=e11] clickable [cursor:pointer, onclick]
+          - paragraph
+            - StaticText "Preview of Spotify"
+          - paragraph
+            - StaticText "Sign up to get unlimited songs and podcasts with occasional ads. No credit card needed."
+          - button "Sign up for free" [ref=e15]
+            - StaticText "Sign up for free"
+        - generic
+          - generic "Player controls"
+            - switch "Enable shuffle" [checked=false, disabled, ref=e26]
+            - button "Previous" [disabled, ref=e27]
+            - button "Pause" [disabled, ref=e28]
+            - button "Next" [disabled, ref=e29]
+            - checkbox "Disable repeat" [checked=false, disabled, ref=e30]
+            - StaticText "-:--"
+            - generic
+              - LabelText
+                - StaticText "Change progress"
+                - slider "Change progress" [disabled, ref=e41]: 0
+              - generic
+            - generic [ref=e31] clickable [onclick]
+              - StaticText "-:--"
+          - button "Now playing view" [disabled, ref=e16]
+          - generic
+            - button "Mute" [ref=e32]
+            - generic
+              - LabelText
+                - StaticText "Change volume"
+                - slider "Change volume" [ref=e42]: 1
+              - generic [ref=e35] clickable [cursor:pointer]
+                - generic
+      - generic
+        - banner "Top bar and user menu"
+        - generic
+          - generic
+            - main
+              - generic
+                - image
+                - StaticText "Loading"
+              - separator
+              - navigation
+                - list
+                  - paragraph
+                    - StaticText "Company"
+                  - link "About" [ref=e43]
+                  - link "Jobs" [ref=e44]
+                  - link "For the Record" [ref=e45]
+                - list
+                  - paragraph
+                    - StaticText "Communities"
+                  - link "For Artists" [ref=e46]
+                  - link "Developers" [ref=e47]
+                  - link "Advertising" [ref=e48]
+                  - link "Investors" [ref=e49]
+                  - link "Vendors" [ref=e50]
+                - list
+                  - paragraph
+                    - StaticText "Useful links"
+                  - link "Support" [ref=e51]
+                  - link "Free Mobile App" [ref=e52]
+                  - link "Popular by Country" [ref=e53]
+                  - link "Import your music" [ref=e54]
+                - list
+                  - paragraph
+                    - StaticText "Spotify Plans"
+                  - link "Premium Lite" [ref=e55]
+                  - link "Premium Standard" [ref=e56]
+                  - link "Premium Platinum" [ref=e57]
+                  - link "Premium Student" [ref=e58]
+                  - link "Spotify Free" [ref=e59]
+                - generic
+                  - link "Instagram" [ref=e60]
+                  - link "Twitter" [ref=e61]
+                  - link "Facebook" [ref=e62]
+                - separator
+                - StaticText "© 2026 Spotify AB"
+- generic
+  - generic "Privacy" [ref=e2] focusable [tabindex]
+    - dialog "Privacy"
+      - generic
+        - StaticText "We and"
+        - link "our partners" [ref=e36]
+        - StaticText " use cookies to personalize your experience, to show you ads based on your interests, and for measurement and analytics purposes. By using our website and services, you agree to our use of cookies as described in our"
+        - link "Cookie Policy." [ref=e37]
+      - button "Close" [ref=e12]
