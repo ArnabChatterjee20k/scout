@@ -28,3 +28,6 @@ asyncio_mode = "auto"
 markers = [
     "e2e: end-to-end tests",
 ]
+
+[tool.setuptools]
+include = ["scout*"]
