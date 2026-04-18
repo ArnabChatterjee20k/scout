@@ -101,3 +101,21 @@ PLAYWRIGHT_BROWSERS_PATH=0 uv run pytest tests/e2e -m e2e
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=0 uv run pytest tests/e2e/test_scout_e2e.py -m e2e
 ```
+
+### Future easier interface
+```py
+result = await scout.run(
+    "https://example.com",
+    mode="crawl",
+    config=RunConfig(
+        limits=Limits(pages=20, depth=2),
+        scrolling=Scrolling.virtual("#feed"),
+        outputs=Outputs(html=True, markdown=True),
+    ),
+    steps=[
+        click("#accept"),
+        type("#search", "pricing"),
+    ],
+    extract=Schema(ProductSchema),
+)
+```
