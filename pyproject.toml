@@ -29,5 +29,5 @@ markers = [
     "e2e: end-to-end tests",
 ]
 
-[tool.setuptools]
+[tool.setuptools.packages.find]
 include = ["scout*"]
