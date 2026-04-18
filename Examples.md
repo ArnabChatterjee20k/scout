@@ -270,6 +270,7 @@ asyncio.run(main())
 ## 10) Agent interaction (Gemini + agent-browser)
 
 This is useful for harder tasks that require exploratory, multi-step interaction.
+Run `scrape(...)` first so the browser is on the target page before `interact(...)`.
 
 `.env` example:
 
@@ -288,6 +289,7 @@ from scout.agents.browser_agent import BrowserAgentConfig
 
 async def main() -> None:
     async with Scout().start() as scout:
+        await scout.scrape("https://example.com/products")
         result = await scout.interact(
             "Collect product names and prices visible on this page, then summarize.",
             agent_config=BrowserAgentConfig(
