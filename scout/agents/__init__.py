@@ -12,7 +12,7 @@ load_dotenv(".env")
 # )
 
 # HACK: have your api keys separate via comma
-api_keys = os.environ.get("GOOGLE_API_KEY","").split(",")
+api_keys = os.environ.get("GOOGLE_API_KEY", "").split(",")
 
 models = [
     GoogleModel("gemini-flash-latest", provider=GoogleProvider(api_key=key.strip()))
