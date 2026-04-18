@@ -1,9 +1,10 @@
 from .adapters.Playwright import PlaywrightAdapter, Response, TIMEOUT
-from .core import Action, CrawlConfig
+from .core import Action, CrawlConfig, ScrollingRule
 from .adapters.browser_manager import BrowserManager, BrowserManagerConfig
 from contextlib import asynccontextmanager
-import json, subprocess
+import json, subprocess, asyncio
 from asyncio.queues import Queue
+from typing import Any, Optional
 
 from .agents.browser_agent import BrowserAgentConfig, BrowserAgentResult, Deps, execute
 from .logger import get_logger
@@ -106,15 +107,100 @@ class Scout:
         self._crawler.set_timeout(timeout)
         return self
 
-    async def scrape(self, url: str, actions: list[Action] | None = None):
+    def set_headless(self, headless: bool = True) -> "Scout":
+        if self._browser_manager.started:
+            raise RuntimeError(
+                "set_headless() has no effect after the browser started; "
+                "call it before start() or before `async with Scout()`."
+            )
+        self._browser_manager.config.headless = headless
+        return self
+
+    def set_scrolling_rule(self, rule: Optional[ScrollingRule]) -> "Scout":
+        self._crawler.set_scrolling_rule(rule)
+        return self
+
+    async def scrape(
+        self,
+        url: str,
+        actions: list[Action] | None = None,
+    ):
         actions = actions or []
         async with self._crawler as crawler:
             return await crawler.scrape(url, actions)
 
-    async def crawl(self, url: str, config: CrawlConfig):
-        queue = Queue(config.page_limit * config.max_depth)
-        async with self._crawler as crawler:
-            doc = await crawler.scrape(url)
+    async def crawl(self, url: str, config: CrawlConfig) -> list[Any]:
+        # Feature idea -> adding the nodes of the url to a graph db and visualize it
+        queue: Queue[tuple[str, int]] = Queue()
+        await queue.put((url, 1))
+        result: list[Any] = []
+        visited: set[str] = {url}
+        visited_lock = asyncio.Lock()
+        result_lock = asyncio.Lock()
+
+        collect_urls_js = f"""() => {{
+            const urls = new Set();
+            for (const a of document.querySelectorAll('a[href]')) {{
+                try {{ urls.add(new URL(a.href, document.baseURI).href); }} catch (e) {{}}
+            }}
+            return Array.from(urls);
+        }}"""
+
+        async def enqueue_urls(js_result: Any, depth: int) -> None:
+            if not isinstance(js_result, list):
+                return
+            if depth > config.max_depth:
+                return
+
+            for item in js_result:
+                if isinstance(item, str):
+                    if not config.is_included(item):
+                        continue
+                    async with visited_lock:
+                        if item in visited:
+                            continue
+                        visited.add(item)
+                    await queue.put((item, depth))
+
+        async def worker() -> None:
+            while True:
+                current_url, depth = await queue.get()
+                try:
+                    if len(result) >= config.page_limit:
+                        continue
+                    if depth > config.max_depth:
+                        continue
+
+                    async with self._crawler as crawler:
+                        crawler.set_scrolling_rule(config.scrolling)
+                        doc = await crawler.scrape(
+                            current_url,
+                            actions=[
+                                Action(
+                                    kind="run_js_code",
+                                    selector=None,
+                                    value=collect_urls_js,
+                                    on_complete=lambda js_result, _page_url: enqueue_urls(
+                                        js_result, depth + 1
+                                    ),
+                                )
+                            ],
+                        )
+                    async with result_lock:
+                        if len(result) < config.page_limit:
+                            result.append(doc)
+                finally:
+                    queue.task_done()
+                if config.page_transition_delay > 0:
+                    await asyncio.sleep(config.page_transition_delay)
+
+        worker_count = max(1, config.concurrency)
+        workers = [asyncio.create_task(worker()) for _ in range(worker_count)]
+        await queue.join()
+        for w in workers:
+            w.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
+        return result
 
     async def interact(
         self,

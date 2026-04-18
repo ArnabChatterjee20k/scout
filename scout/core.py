@@ -66,6 +66,61 @@ class NetworkRule:
 
 
 @dataclass
+class VirtualScrollConfig:
+    """
+    Configuration for container-based virtualized scrolling (e.g. feed UIs).
+    """
+
+    container_selector: str
+    scroll_count: int = 20
+    wait_after_scroll: float = 0.25
+    scroll_by: Union[int, Literal["page_height", "container_height"]] = (
+        "container_height"
+    )
+    enabled: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "container_selector": self.container_selector,
+            "scroll_count": self.scroll_count,
+            "wait_after_scroll": self.wait_after_scroll,
+            "scroll_by": self.scroll_by,
+            "enabled": self.enabled,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "VirtualScrollConfig":
+        return cls(
+            container_selector=value["container_selector"],
+            scroll_count=int(value.get("scroll_count", 20)),
+            wait_after_scroll=float(value.get("wait_after_scroll", 0.25)),
+            scroll_by=value.get("scroll_by", "container_height"),
+            enabled=bool(value.get("enabled", True)),
+        )
+
+
+@dataclass
+class ScrollingRule:
+    """
+    Optional scrolling behavior to help load dynamic content before extraction.
+
+    If `full_page_scan` is True, the adapter performs a viewport-step scroll down
+    (optionally capped) before extracting page HTML.
+    """
+
+    full_page_scan: bool = False
+    scroll_delay: float = 0.1
+    # Use an explicit cap by default to avoid hangs on infinite-scroll pages.
+    # Set to None for unlimited scrolling.
+    max_scroll_steps: Optional[int] = 10
+    virtual_scroll: Optional[Union[VirtualScrollConfig, dict[str, Any]]] = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.virtual_scroll, dict):
+            self.virtual_scroll = VirtualScrollConfig.from_dict(self.virtual_scroll)
+
+
+@dataclass
 class Metadata:
     title: str
     url: str
@@ -209,6 +264,8 @@ class CrawlConfig:
     page_limit: int = 5
     max_depth: int = 10
     concurrency: int = 1
+    page_transition_delay: int = 0
+    scrolling: Optional[ScrollingRule] = None
 
     # just for caching the included list post init
     _normalized_include: list["Include"] = field(

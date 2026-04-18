@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import patch
 
-from scout.core import Document, ExtractionSchema, ExtractionSelector
+from scout.core import (
+    CrawlConfig,
+    Document,
+    ExtractionSchema,
+    ExtractionSelector,
+    Include,
+)
 
 
 def _minimal_document(html: str) -> Document:
@@ -94,3 +101,37 @@ class TestDocumentToMarkdown:
         assert md == "# md\n"
         assert doc.markdown == "# md\n"
         mock_convert.assert_called_once_with(doc.html)
+
+
+class TestCrawlConfig:
+    def test_includes_everything_when_include_list_is_empty(self) -> None:
+        config = CrawlConfig()
+        assert config.is_included("https://example.test/a")
+        assert config.is_included("https://example.test/b")
+
+    def test_exact_string_include_and_exclude(self) -> None:
+        target = "https://example.test/keep"
+        blocked = "https://example.test/skip"
+        config = CrawlConfig(include=[target], exclude=[blocked])
+
+        assert config.is_included(target) is True
+        assert config.is_included(blocked) is False
+
+    def test_regex_include_and_exclude(self) -> None:
+        config = CrawlConfig(
+            include=[re.compile(r"^https://example\.test/blog/")],
+            exclude=[re.compile(r"/drafts/")],
+        )
+
+        assert config.is_included("https://example.test/blog/post-1") is True
+        assert config.is_included("https://example.test/blog/drafts/post-2") is False
+        assert config.is_included("https://example.test/docs/page") is False
+
+    def test_supports_include_dataclass_and_dict_forms(self) -> None:
+        keep_with_dataclass = Include(pattern="https://example.test/from-dataclass")
+        keep_with_dict = {"pattern": "https://example.test/from-dict"}
+        config = CrawlConfig(include=[keep_with_dataclass, keep_with_dict])
+
+        assert config.is_included("https://example.test/from-dataclass") is True
+        assert config.is_included("https://example.test/from-dict") is True
+        assert config.is_included("https://example.test/other") is False

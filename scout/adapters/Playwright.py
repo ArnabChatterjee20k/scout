@@ -1,5 +1,14 @@
 from typing import Any, Awaitable, Callable, Optional, Union
-from ..core import Document, Action, Selector, NetworkRule, RequestModel, ResponseModel
+from ..core import (
+    Document,
+    Action,
+    Selector,
+    NetworkRule,
+    RequestModel,
+    ResponseModel,
+    ScrollingRule,
+    VirtualScrollConfig,
+)
 from ..scripts import load_script
 from ..logger import get_logger
 from playwright.async_api import (
@@ -34,6 +43,7 @@ class PlaywrightAdapter:
 
         # rules
         self._network_rule = NetworkRule()
+        self._scrolling_rule: Optional[ScrollingRule] = None
 
         self._requests = []
         self._responses = []
@@ -63,6 +73,9 @@ class PlaywrightAdapter:
     # rules
     def set_network_rule(self, rule: NetworkRule):
         self._network_rule = rule
+
+    def set_scrolling_rule(self, rule: Optional[ScrollingRule]):
+        self._scrolling_rule = rule
 
     def set_cdp_endpoint(self, browser_cdp_endpoint: str):
         self._browser_cdp_endpoint = browser_cdp_endpoint
@@ -125,6 +138,22 @@ class PlaywrightAdapter:
             await self._remove_popups(page)
             await self._simulate_user(page)
 
+            # Optional scrolling behavior before actions / extraction.
+            if self._scrolling_rule and self._scrolling_rule.full_page_scan:
+                await self._handle_full_page_scan(
+                    page,
+                    scroll_delay=self._scrolling_rule.scroll_delay,
+                    max_scroll_steps=self._scrolling_rule.max_scroll_steps,
+                )
+            if (
+                self._scrolling_rule
+                and self._scrolling_rule.virtual_scroll is not None
+                and self._scrolling_rule.virtual_scroll.enabled
+            ):
+                await self._handle_virtual_scroll(
+                    page, self._scrolling_rule.virtual_scroll
+                )
+
             for action in actions:
                 try:
                     result = await self.execute(page, action)
@@ -170,6 +199,222 @@ class PlaywrightAdapter:
             # other way would would be storing all the actions in a cache with session-id
             # then repeat/replay those actions via session id on the separate process to get the same state
             # await page.close()
+
+    async def get_page_dimensions(self, page: Page) -> dict[str, int]:
+        # Keep it simple and robust across doctypes / quirks.
+        return await page.evaluate("""() => {
+                const de = document.documentElement;
+                const b = document.body;
+                const height = Math.max(
+                  de?.scrollHeight || 0,
+                  de?.offsetHeight || 0,
+                  b?.scrollHeight || 0,
+                  b?.offsetHeight || 0
+                );
+                const width = Math.max(
+                  de?.scrollWidth || 0,
+                  de?.offsetWidth || 0,
+                  b?.scrollWidth || 0,
+                  b?.offsetWidth || 0
+                );
+                return { height, width };
+            }""")
+
+    async def safe_scroll(
+        self, page: Page, x: int, y: int, *, delay: float = 0.1
+    ) -> None:
+        # Prefer JS scrollTo: works even when wheel events are blocked.
+        await page.evaluate(
+            """([x, y]) => {
+                window.scrollTo(x, y);
+            }""",
+            [x, y],
+        )
+        if delay and delay > 0:
+            await page.wait_for_timeout(int(delay * 1000))
+
+    async def _handle_full_page_scan(
+        self,
+        page: Page,
+        scroll_delay: float = 0.1,
+        max_scroll_steps: Optional[int] = None,
+    ) -> None:
+        """
+        Helper method to handle full page scanning.
+
+        Steps:
+        - Determine viewport height
+        - Scroll down in viewport increments until the bottom is reached
+        - Re-check page height for dynamic growth
+        - Cap steps via `max_scroll_steps` to avoid infinite scroll hangs
+        """
+        if max_scroll_steps is None:
+            max_scroll_steps = 10
+
+        try:
+            viewport_size = page.viewport_size
+            if viewport_size is None:
+                viewport_size = await page.evaluate(
+                    "() => ({ width: window.innerWidth, height: window.innerHeight })"
+                )
+            viewport_height = int(viewport_size.get("height") or 800)
+
+            current_position = viewport_height
+            await self.safe_scroll(page, 0, current_position, delay=scroll_delay)
+
+            dimensions = await self.get_page_dimensions(page)
+            total_height = int(dimensions["height"])
+
+            scroll_step_count = 0
+            while current_position < total_height:
+                if (
+                    max_scroll_steps is not None
+                    and scroll_step_count >= max_scroll_steps
+                ):
+                    break
+
+                current_position = min(current_position + viewport_height, total_height)
+                await self.safe_scroll(page, 0, current_position, delay=scroll_delay)
+                scroll_step_count += 1
+
+                new_height = int((await self.get_page_dimensions(page))["height"])
+                if new_height > total_height:
+                    total_height = new_height
+
+            await self.safe_scroll(page, 0, 0, delay=scroll_delay)
+        except Exception as e:
+            self._logger.warning(
+                msg="Failed to perform full page scan",
+                tag="PAGE_SCAN",
+                error=str(e),
+            )
+        else:
+            await self.safe_scroll(page, 0, total_height, delay=scroll_delay)
+
+    async def _handle_virtual_scroll(
+        self, page: Page, config: VirtualScrollConfig
+    ) -> None:
+        """
+        Handle virtual scroll containers by capturing and merging replaced chunks.
+        """
+        try:
+            self._logger.info(
+                "Starting virtual scroll capture for container: %s",
+                config.container_selector,
+                tag="VSCROLL",
+            )
+
+            virtual_scroll_js = """
+            async (config) => {
+                const container = document.querySelector(config.container_selector);
+                if (!container) {
+                    throw new Error(`Container not found: ${config.container_selector}`);
+                }
+
+                const htmlChunks = [];
+                let previousHTML = container.innerHTML;
+                let scrollCount = 0;
+
+                let scrollAmount;
+                if (typeof config.scroll_by === "number") {
+                    scrollAmount = config.scroll_by;
+                } else if (config.scroll_by === "page_height") {
+                    scrollAmount = window.innerHeight;
+                } else {
+                    scrollAmount = container.offsetHeight;
+                }
+
+                while (scrollCount < config.scroll_count) {
+                    container.scrollTop += scrollAmount;
+
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, config.wait_after_scroll * 1000)
+                    );
+
+                    const currentHTML = container.innerHTML;
+
+                    if (currentHTML === previousHTML) {
+                        // No change, continue scrolling.
+                    } else if (currentHTML.startsWith(previousHTML)) {
+                        // New content appended in-place, no chunk capture required.
+                    } else {
+                        // Items replaced, capture previous chunk for merge.
+                        htmlChunks.push(previousHTML);
+                    }
+
+                    previousHTML = currentHTML;
+                    scrollCount++;
+
+                    if (
+                        container.scrollTop + container.clientHeight >=
+                        container.scrollHeight - 10
+                    ) {
+                        if (htmlChunks.length > 0) {
+                            htmlChunks.push(currentHTML);
+                        }
+                        break;
+                    }
+                }
+
+                if (htmlChunks.length > 0) {
+                    const tempDiv = document.createElement("div");
+                    const seenTexts = new Set();
+                    const uniqueElements = [];
+
+                    for (const chunk of htmlChunks) {
+                        tempDiv.innerHTML = chunk;
+                        const elements = tempDiv.children;
+
+                        for (let i = 0; i < elements.length; i++) {
+                            const element = elements[i];
+                            const normalizedText = (element.innerText || "")
+                                .toLowerCase()
+                                .replace(/[\\s\\W]/g, "");
+
+                            if (!seenTexts.has(normalizedText)) {
+                                seenTexts.add(normalizedText);
+                                uniqueElements.push(element.outerHTML);
+                            }
+                        }
+                    }
+
+                    container.innerHTML = uniqueElements.join("\\n");
+                    return {
+                        success: true,
+                        chunksCount: htmlChunks.length,
+                        uniqueCount: uniqueElements.length,
+                        replaced: true
+                    };
+                }
+
+                return {
+                    success: true,
+                    chunksCount: 0,
+                    uniqueCount: 0,
+                    replaced: false
+                };
+            }
+            """
+
+            result = await page.evaluate(virtual_scroll_js, config.to_dict())
+            if result.get("replaced", False):
+                self._logger.info(
+                    "Virtual scroll merged %s unique elements from %s chunks",
+                    result.get("uniqueCount", 0),
+                    result.get("chunksCount", 0),
+                    tag="VSCROLL",
+                )
+            else:
+                self._logger.info(
+                    "Virtual scroll completed with append-only content",
+                    tag="VSCROLL",
+                )
+        except Exception as e:
+            self._logger.error(
+                msg="Virtual scroll capture failed",
+                tag="VSCROLL",
+                error=str(e),
+            )
 
     def _handle_listeners(self, page: Page):
         def _handle_requests(request: Request):
