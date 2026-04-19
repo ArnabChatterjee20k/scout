@@ -21,4 +21,4 @@ models = [
     if key and key.strip()
 ]
 
-model = FallbackModel(*models)
+model = FallbackModel(*models) if models else None
