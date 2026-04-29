@@ -9,63 +9,7 @@ from typing import Any, Optional
 from .agents.browser_agent import BrowserAgentConfig, BrowserAgentResult, Deps, execute
 from .logger import get_logger
 
-
-async def get_response(res: Response):
-    try:
-        # 1. Ensure it's JSON
-        content_type = res.request.headers.get("content-type", "")
-        if "application/json" not in content_type:
-            return None
-
-        # 2. Check operationName from request body
-        post_data = res.request.post_data
-        if not post_data:
-            return None
-
-        payload = json.loads(post_data)
-
-        if payload.get("operationName") != "fetchPlaylistContents":
-            return None
-
-        # 3. Now safely parse response body
-        body = json.loads((await res.body()).decode())
-
-        items = body["playlistV2"]["content"]["items"]
-        tracks = []
-        for item in items:
-            try:
-                track = item["itemV2"]["data"]
-                tracks.append(
-                    {
-                        "name": track["name"],
-                        "artists": [
-                            a["profile"]["name"] for a in track["artists"]["items"]
-                        ],
-                        "album": track["albumOfTrack"]["name"],
-                        "duration_ms": track["trackDuration"]["totalMilliseconds"],
-                        "uri": track["uri"],
-                        "added_at": item["addedAt"]["isoString"],
-                    }
-                )
-            except Exception:
-                continue
-
-        return tracks
-
-    except Exception as e:
-        print(e)
-        return None
-
-
-# self._crawler.set_network_rule(
-#         rule = NetworkRule(
-#         match_url=re.compile(r"/query(?:/|$)"),
-#         on_request=lambda req: ...,
-#         on_response=get_response,
-#         log_request=False,
-#         log_response=False
-#     )
-# )
+from domdistill.embedding import SentenceTransformerEmbedder
 
 
 class Scout:
@@ -75,6 +19,11 @@ class Scout:
             browser_config or BrowserManagerConfig()
         )
         self._logger = get_logger("SCOUT")
+
+    @staticmethod
+    def load_chunking_models(save_dir: str = "./models/embeddings"):
+        embedder = SentenceTransformerEmbedder(save_dir)
+        embedder._load()
 
     @asynccontextmanager
     async def start(self):

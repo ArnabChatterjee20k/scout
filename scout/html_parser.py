@@ -48,3 +48,10 @@ class HTMLParser:
             return self.from_text(value)
         else:
             raise ValueError(f"Unsupported selector kind: {kind}")
+
+    def remove_tags(self, tags: list[str]) -> str:
+        for tag in tags:
+            for el in self._tree.findall(f".//{tag}"):
+                el.drop_tree()
+
+        return lxml_html.tostring(self._tree, encoding="unicode", pretty_print=True)
