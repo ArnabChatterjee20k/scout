@@ -9,6 +9,9 @@ from typing import Any, Optional
 from .agents.browser_agent import BrowserAgentConfig, BrowserAgentResult, Deps, execute
 from .logger import get_logger
 
+from domdistill.embedding import SentenceTransformerEmbedder
+
+
 class Scout:
     def __init__(self, *, browser_config: BrowserManagerConfig | None = None):
         self._crawler = PlaywrightAdapter()
@@ -16,6 +19,11 @@ class Scout:
             browser_config or BrowserManagerConfig()
         )
         self._logger = get_logger("SCOUT")
+
+    @staticmethod
+    def load_chunking_models(save_dir: str = "./models/embeddings"):
+        embedder = SentenceTransformerEmbedder(save_dir)
+        embedder._load()
 
     @asynccontextmanager
     async def start(self):

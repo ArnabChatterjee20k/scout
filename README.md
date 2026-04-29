@@ -24,6 +24,11 @@ uv sync --dev
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=0 uv run playwright install chromium
 ```
+For windows
+```
+$env:PLAYWRIGHT_BROWSERS_PATH=0
+uv run playwright install chromium
+```
 
 ### 3) Optional `.env` for API keys and agent model
 
