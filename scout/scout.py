@@ -2,7 +2,7 @@ from .adapters.Playwright import PlaywrightAdapter, Response, TIMEOUT
 from .core import Action, CrawlConfig, ScrollingRule
 from .adapters.browser_manager import BrowserManager, BrowserManagerConfig
 from contextlib import asynccontextmanager
-import json, subprocess, asyncio
+import subprocess, asyncio
 from asyncio.queues import Queue
 from typing import Any, Optional
 
