@@ -193,7 +193,7 @@ class Document:
             remove_tags.append("style")
         html = parser.remove_tags(tags=[*remove_tags])
         chunker = HTMLIntentChunker(html)
-        chunks = chunker.get_chunks(query, top_k_chunks=top_k, pool_size=concurrency)
+        chunks = chunker.get_chunks(query, top_k_chunks=top_k, max_merge_span=10)
         result = [chunk.content for chunk in chunks.top_chunks]
         return result
 
