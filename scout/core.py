@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import (
     Optional,
     Literal,
@@ -123,19 +123,103 @@ class ScrollingRule:
 
 @dataclass
 class Metadata:
-    title: str
-    url: str
-    status: int
-    headers: dict
-    cookies: list[dict]
-    storage: dict
+
+    title: Optional[str] = None
+    url: Optional[str] = None
+    final_url: Optional[str] = None
+    status: Optional[int] = None
+    headers: dict[str, Any] = field(default_factory=dict)
+    cookies: list[dict[str, Any]] = field(default_factory=list)
+    storage: dict[str, Any] = field(default_factory=dict)
+
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
+    meta_author: Optional[str] = None
+    meta_publisher: Optional[str] = None
+    meta_copyright: Optional[str] = None
+    meta_revisit_after: Optional[str] = None
+    meta_rating: Optional[str] = None
+    robots: Optional[str] = None
+    googlebot: Optional[str] = None
+    bingbot: Optional[str] = None
+    viewport: Optional[str] = None
+    charset: Optional[str] = None
+    meta_refresh: Optional[str] = None
+    theme_color: Optional[str] = None
+    color_scheme: Optional[str] = None
+    application_name: Optional[str] = None
+    apple_mobile_web_app_title: Optional[str] = None
+    apple_mobile_web_app_capable: Optional[str] = None
+    mobile_web_app_capable: Optional[str] = None
+    msapplication_tilecolor: Optional[str] = None
+    referrer: Optional[str] = None
+    format_detection: Optional[str] = None
+    generator: Optional[str] = None
+    canonical_url: Optional[str] = None
+    html_lang: Optional[str] = None
+    alternate_locales: list[dict[str, Any]] = field(default_factory=list)
+    feeds: list[dict[str, Any]] = field(default_factory=list)
+    favicon: Optional[str] = None
+    apple_touch_icon: Optional[str] = None
+    manifest_url: Optional[str] = None
+    prev_url: Optional[str] = None
+    next_url: Optional[str] = None
+    document_h1: Optional[str] = None
+
+    og_title: Optional[str] = None
+    og_description: Optional[str] = None
+    og_type: Optional[str] = None
+    og_url: Optional[str] = None
+    og_image: Optional[str] = None
+    og_image_alt: Optional[str] = None
+    og_image_width: Optional[str] = None
+    og_image_height: Optional[str] = None
+    og_site_name: Optional[str] = None
+    og_locale: Optional[str] = None
+    og_locale_alternate: Optional[str] = None
+    article_published_time: Optional[str] = None
+    article_modified_time: Optional[str] = None
+    article_author: Optional[str] = None
+    article_section: Optional[str] = None
+    article_tag: Optional[str] = None
+
+    twitter_card: Optional[str] = None
+    twitter_site: Optional[str] = None
+    twitter_creator: Optional[str] = None
+    twitter_title: Optional[str] = None
+    twitter_description: Optional[str] = None
+    twitter_image: Optional[str] = None
+    twitter_image_alt: Optional[str] = None
+
+    license_urls: list[str] = field(default_factory=list)
+    dns_prefetch_urls: list[str] = field(default_factory=list)
+    preconnect_urls: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Metadata":
+        names = {f.name for f in fields(cls)}
+        kwargs = {k: v for k, v in data.items() if k in names}
+        for list_key in (
+            "alternate_locales",
+            "feeds",
+            "license_urls",
+            "dns_prefetch_urls",
+            "preconnect_urls",
+            "cookies",
+        ):
+            if list_key in kwargs and kwargs[list_key] is None:
+                kwargs[list_key] = []
+        return cls(**kwargs)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
 class Document:
     url: str
     html: str
-    metadata: dict
+    metadata: dict[str, Any]
     markdown: Optional[str]
     screenshots: list[bytes]
     requests: list[RequestModel]

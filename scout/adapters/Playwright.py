@@ -107,6 +107,168 @@ class PlaywrightAdapter:
             context = await self.browser.new_context()
         return await context.new_page()
 
+    async def _collect_seo_metadata(self, page: Page) -> dict[str, Any]:
+        """
+        Extract SEO-oriented signals from the live DOM (meta, link rel, OG, Twitter).
+        All fields are merged as top-level keys on :attr:`Document.metadata`.
+        """
+        return await page.evaluate(
+            """() => {
+                const trim = (v) => (v && String(v).trim()) || null;
+
+                const byName = (name) => {
+                    const el = document.querySelector(`meta[name="${name}"]`);
+                    return trim(el && el.getAttribute("content"));
+                };
+                const byProperty = (prop) => {
+                    const el = document.querySelector(`meta[property="${prop}"]`);
+                    return trim(el && el.getAttribute("content"));
+                };
+                const byHttpEquiv = (equiv) => {
+                    const el = document.querySelector(`meta[http-equiv="${equiv}"]`);
+                    return trim(el && el.getAttribute("content"));
+                };
+
+                const linkHrefsAll = (rel) => {
+                    const out = [];
+                    document.querySelectorAll(`link[rel="${rel}"]`).forEach((l) => {
+                        if (l.href) out.push(trim(l.href));
+                    });
+                    return out;
+                };
+
+                const canonicalEl = document.querySelector('link[rel="canonical"]');
+                const canonical_url = canonicalEl && canonicalEl.href
+                    ? trim(canonicalEl.href)
+                    : null;
+
+                const alternates = [];
+                document.querySelectorAll('link[rel="alternate"][hreflang]').forEach((l) => {
+                    const hreflang = trim(l.getAttribute("hreflang"));
+                    const href = trim(l.href);
+                    if (hreflang && href) alternates.push({ hreflang, href });
+                });
+
+                const feeds = [];
+                document.querySelectorAll('link[rel="alternate"]').forEach((l) => {
+                    const type = (l.getAttribute("type") || "").toLowerCase();
+                    if (
+                        type.includes("rss") ||
+                        type.includes("atom") ||
+                        type.includes("rdf") ||
+                        type.endsWith("xml")
+                    ) {
+                        const href = trim(l.href);
+                        if (href) {
+                            feeds.push({
+                                title: trim(l.getAttribute("title")),
+                                href,
+                                type: trim(l.getAttribute("type")),
+                            });
+                        }
+                    }
+                });
+
+                let favicon = null;
+                document.querySelectorAll("link[rel]").forEach((l) => {
+                    const r = (l.getAttribute("rel") || "").toLowerCase();
+                    const tokens = r.split(/\\s+/).filter(Boolean);
+                    if (!favicon && (tokens.includes("icon") || r === "shortcut icon")) {
+                        favicon = l.href ? trim(l.href) : null;
+                    }
+                });
+
+                const appleEl =
+                    document.querySelector('link[rel="apple-touch-icon"]') ||
+                    document.querySelector('link[rel="apple-touch-icon-precomposed"]');
+                const apple_touch_icon = appleEl && appleEl.href ? trim(appleEl.href) : null;
+
+                const manifestEl = document.querySelector('link[rel="manifest"]');
+                const manifest_url = manifestEl && manifestEl.href ? trim(manifestEl.href) : null;
+
+                const prevEl = document.querySelector('link[rel="prev"]');
+                const nextEl = document.querySelector('link[rel="next"]');
+                const prev_url = prevEl && prevEl.href ? trim(prevEl.href) : null;
+                const next_url = nextEl && nextEl.href ? trim(nextEl.href) : null;
+
+                const charsetMeta = document.querySelector("meta[charset]");
+                const charset = trim(
+                    document.characterSet ||
+                        (charsetMeta && charsetMeta.getAttribute("charset"))
+                );
+
+                const h1 = document.querySelector("h1");
+                const document_h1 = h1 ? trim(h1.textContent.replace(/\\s+/g, " ")) : null;
+
+                const metaOgImageAlt = byProperty("og:image:alt");
+                const metaOgImageWidth = byProperty("og:image:width");
+                const metaOgImageHeight = byProperty("og:image:height");
+
+                return {
+                    meta_description: byName("description"),
+                    meta_keywords: byName("keywords"),
+                    meta_author: byName("author"),
+                    meta_publisher: byName("publisher"),
+                    meta_copyright: byName("copyright"),
+                    meta_revisit_after: byName("revisit-after"),
+                    meta_rating: byName("rating"),
+                    robots: byName("robots"),
+                    googlebot: byName("googlebot"),
+                    bingbot: byName("bingbot"),
+                    viewport: byName("viewport"),
+                    charset,
+                    meta_refresh: byHttpEquiv("refresh"),
+                    theme_color: byName("theme-color"),
+                    color_scheme: byName("color-scheme"),
+                    application_name: byName("application-name"),
+                    apple_mobile_web_app_title: byName("apple-mobile-web-app-title"),
+                    apple_mobile_web_app_capable: byName("apple-mobile-web-app-capable"),
+                    mobile_web_app_capable: byName("mobile-web-app-capable"),
+                    msapplication_tilecolor: byName("msapplication-TileColor"),
+                    referrer: byName("referrer"),
+                    format_detection: byName("format-detection"),
+                    generator: byName("generator"),
+                    canonical_url,
+                    html_lang: trim(document.documentElement.lang),
+                    alternate_locales: alternates,
+                    feeds,
+                    favicon,
+                    apple_touch_icon,
+                    manifest_url,
+                    prev_url,
+                    next_url,
+                    document_h1,
+                    og_title: byProperty("og:title"),
+                    og_description: byProperty("og:description"),
+                    og_type: byProperty("og:type"),
+                    og_url: byProperty("og:url"),
+                    og_image: byProperty("og:image"),
+                    og_image_alt: metaOgImageAlt,
+                    og_image_width: metaOgImageWidth,
+                    og_image_height: metaOgImageHeight,
+                    og_site_name: byProperty("og:site_name"),
+                    og_locale: byProperty("og:locale"),
+                    og_locale_alternate: byProperty("og:locale:alternate"),
+                    article_published_time: byProperty("article:published_time"),
+                    article_modified_time: byProperty("article:modified_time"),
+                    article_author: byProperty("article:author"),
+                    article_section: byProperty("article:section"),
+                    article_tag: byProperty("article:tag"),
+                    twitter_card: byName("twitter:card") || byProperty("twitter:card"),
+                    twitter_site: byName("twitter:site") || byProperty("twitter:site"),
+                    twitter_creator: byName("twitter:creator") || byProperty("twitter:creator"),
+                    twitter_title: byName("twitter:title") || byProperty("twitter:title"),
+                    twitter_description:
+                        byName("twitter:description") || byProperty("twitter:description"),
+                    twitter_image: byName("twitter:image") || byProperty("twitter:image"),
+                    twitter_image_alt: byName("twitter:image:alt") || byProperty("twitter:image:alt"),
+                    license_urls: linkHrefsAll("license"),
+                    dns_prefetch_urls: linkHrefsAll("dns-prefetch"),
+                    preconnect_urls: linkHrefsAll("preconnect"),
+                };
+            }"""
+        )
+
     async def scrape(self, url: str, actions: list[Action] = []):
         page = await self._new_page()
         page.set_default_timeout(self._timeout)
@@ -170,13 +332,16 @@ class PlaywrightAdapter:
 
             await page.wait_for_timeout(self._timeout)
             html = await page.content()
+            seo_metadata = await self._collect_seo_metadata(page)
             metadata = {
                 "title": await page.title(),
                 "url": url,
+                "final_url": page.url,
                 "status": nav_response.status if nav_response else None,
                 "headers": dict(nav_response.headers) if nav_response else {},
                 "cookies": await page.context.cookies(),
                 "storage": await page.context.storage_state(),
+                **seo_metadata,
             }
             return Document(
                 url=url,
