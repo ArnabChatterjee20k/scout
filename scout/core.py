@@ -13,6 +13,7 @@ from typing import (
 from playwright.async_api import Request, Response
 from html_to_markdown import convert
 from pydantic import BaseModel
+from domdistill import HTMLIntentChunker
 
 
 @dataclass
@@ -172,6 +173,28 @@ class Document:
         if md is None:
             md = self.to_markdown()
         return await extract(md, schema, query)
+
+    def get_relevant_sections(
+        self,
+        query: str,
+        top_k: int = 10,
+        remove_tags: list[str] = [],
+    ):
+        # to solve the circular import using the html parser where it required
+        from .html_parser import HTMLParser
+
+        parser = HTMLParser(self.html)
+        for idx in remove_tags:
+            remove_tags[idx] = remove_tags[idx].lower()
+        if "script" not in remove_tags:
+            remove_tags.append("script")
+        if "style" not in remove_tags:
+            remove_tags.append("style")
+        html = parser.remove_tags(tags=[*remove_tags])
+        chunker = HTMLIntentChunker(html)
+        chunks = chunker.get_chunks(query, top_k_chunks=top_k, max_merge_span=10)
+        result = [chunk.content for chunk in chunks.top_chunks]
+        return result
 
 
 SELECTOR_KIND = Literal["css", "xpath", "text", "url", "load_state", "tag"]
