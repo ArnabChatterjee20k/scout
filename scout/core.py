@@ -174,11 +174,10 @@ class Document:
             md = self.to_markdown()
         return await extract(md, schema, query)
 
-    def retrieve(
+    def get_relevant_sections(
         self,
         query: str,
         top_k: int = 10,
-        concurrency: int = 1,
         remove_tags: list[str] = [],
     ):
         # to solve the circular import using the html parser where it required
