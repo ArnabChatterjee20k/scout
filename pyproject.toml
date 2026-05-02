@@ -22,10 +22,6 @@ dev = [
     "pytest>=8.4.0",
     "pytest-asyncio>=1.2.0",
 ]
-embedding = [
-    "bs4>=0.0.2",
-    "langchain-text-splitters>=1.1.2",
-]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
