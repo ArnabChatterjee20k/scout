@@ -18,6 +18,10 @@ Scout is a Python toolkit for browser-backed scraping, crawling, interaction, an
 ```bash
 uv sync --dev
 ```
+If want to use the upgraded version of domdistll then
+```
+uv sync --upgrade-package domdistill
+```
 
 ### 2) Install Playwright Chromium
 

@@ -487,7 +487,7 @@ wheels = [
 [[package]]
 name = "domdistill"
 version = "0.1.0"
-source = { git = "https://github.com/ArnabChatterjee20k/domdistill.git#c7196b33111c76437900e2f327f9f1d30474206f" }
+source = { git = "https://github.com/ArnabChatterjee20k/domdistill.git#cf032a518c4fc6fd80e5325f6d333da7f081dc93" }
 dependencies = [
     { name = "lxml" },
     { name = "sentence-transformers" },
