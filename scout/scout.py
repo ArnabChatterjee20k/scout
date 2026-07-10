@@ -138,6 +138,12 @@ class Scout:
                     async with result_lock:
                         if len(result) < config.page_limit:
                             result.append(doc)
+                except Exception as e:
+                    self._logger.error(
+                        msg=f"Crawling failed for url {current_url}",
+                        tag="CRAWL WORKER",
+                        error=str(e),
+                    )
                 finally:
                     queue.task_done()
                 if config.page_transition_delay > 0:
