@@ -35,5 +35,8 @@ markers = [
 [tool.setuptools.packages.find]
 include = ["scout*"]
 
+[tool.setuptools.package-data]
+scout = ["scripts/**/*.js", "scripts/*.js"]
+
 [tool.uv.sources]
 domdistill = { git = "https://github.com/ArnabChatterjee20k/domdistill.git" }
