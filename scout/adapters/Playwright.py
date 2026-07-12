@@ -105,7 +105,18 @@ class PlaywrightAdapter:
             context = self.browser.contexts[0]
         else:
             context = await self.browser.new_context()
-        return await context.new_page()
+        page = next(
+            (
+                existing_page
+                for existing_page in context.pages
+                if not existing_page.is_closed() and existing_page.url == "about:blank"
+            ),
+            None,
+        )
+        if page is None:
+            page = await context.new_page()
+        await page.bring_to_front()
+        return page
 
     async def _collect_seo_metadata(self, page: Page) -> dict[str, Any]:
         """

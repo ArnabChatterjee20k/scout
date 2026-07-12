@@ -30,6 +30,14 @@ class Scout:
         adapter.set_timeout(self._crawler._timeout)
         return adapter
 
+    async def _resolve_cdp_endpoint(self) -> str:
+        endpoint = await self._browser_manager.get_websocket_debugger_url()
+        if endpoint is None:
+            endpoint = self._browser_manager.cdp_url
+        if endpoint is None:
+            raise RuntimeError("Browser CDP endpoint is not available")
+        return endpoint
+
     @staticmethod
     def load_chunking_models(save_dir: str = "./models/embeddings"):
         embedder = SentenceTransformerEmbedder(save_dir)
@@ -38,9 +46,8 @@ class Scout:
     @asynccontextmanager
     async def start(self):
         await self._browser_manager.start()
-        self._cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
-        if self._cdp_endpoint:
-            self._crawler.set_cdp_endpoint(self._cdp_endpoint)
+        self._cdp_endpoint = await self._resolve_cdp_endpoint()
+        self._crawler.set_cdp_endpoint(self._cdp_endpoint)
         try:
             yield self
         finally:
@@ -52,9 +59,8 @@ class Scout:
 
     async def __aenter__(self):
         await self._browser_manager.start()
-        self._cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
-        if self._cdp_endpoint:
-            self._crawler.set_cdp_endpoint(self._cdp_endpoint)
+        self._cdp_endpoint = await self._resolve_cdp_endpoint()
+        self._crawler.set_cdp_endpoint(self._cdp_endpoint)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -174,7 +180,7 @@ class Scout:
         *,
         agent_config: BrowserAgentConfig | None = None,
     ) -> BrowserAgentResult:
-        cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
+        cdp_endpoint = await self._resolve_cdp_endpoint()
         command = f"agent-browser --cdp {cdp_endpoint} snapshot"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
