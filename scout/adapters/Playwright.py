@@ -112,8 +112,7 @@ class PlaywrightAdapter:
         Extract SEO-oriented signals from the live DOM (meta, link rel, OG, Twitter).
         All fields are merged as top-level keys on :attr:`Document.metadata`.
         """
-        return await page.evaluate(
-            """() => {
+        return await page.evaluate("""() => {
                 const trim = (v) => (v && String(v).trim()) || null;
 
                 const byName = (name) => {
@@ -266,10 +265,11 @@ class PlaywrightAdapter:
                     dns_prefetch_urls: linkHrefsAll("dns-prefetch"),
                     preconnect_urls: linkHrefsAll("preconnect"),
                 };
-            }"""
-        )
+            }""")
 
     async def scrape(self, url: str, actions: list[Action] = []):
+        self._requests = []
+        self._responses = []
         page = await self._new_page()
         page.set_default_timeout(self._timeout)
         page.set_default_navigation_timeout(self._timeout)
