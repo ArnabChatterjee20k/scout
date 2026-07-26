@@ -268,6 +268,8 @@ class PlaywrightAdapter:
             }""")
 
     async def scrape(self, url: str, actions: list[Action] = []):
+        self._requests = []
+        self._responses = []
         page = await self._new_page()
         page.set_default_timeout(self._timeout)
         page.set_default_navigation_timeout(self._timeout)

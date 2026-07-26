@@ -18,7 +18,17 @@ class Scout:
         self._browser_manager: BrowserManager = BrowserManager(
             browser_config or BrowserManagerConfig()
         )
+        self._cdp_endpoint: str | None = None
         self._logger = get_logger("SCOUT")
+
+    def _new_crawler(self) -> PlaywrightAdapter:
+        if not self._cdp_endpoint:
+            raise RuntimeError(
+                "Scout is not started; use `async with Scout().start()` before crawling."
+            )
+        adapter = PlaywrightAdapter(browser_cdp_endpoint=self._cdp_endpoint)
+        adapter.set_timeout(self._crawler._timeout)
+        return adapter
 
     @staticmethod
     def load_chunking_models(save_dir: str = "./models/embeddings"):
@@ -28,9 +38,9 @@ class Scout:
     @asynccontextmanager
     async def start(self):
         await self._browser_manager.start()
-        self._crawler.set_cdp_endpoint(
-            await self._browser_manager.get_websocket_debugger_url()
-        )
+        self._cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
+        if self._cdp_endpoint:
+            self._crawler.set_cdp_endpoint(self._cdp_endpoint)
         try:
             yield self
         finally:
@@ -38,12 +48,13 @@ class Scout:
 
     async def stop(self):
         await self._browser_manager.stop()
+        self._cdp_endpoint = None
 
     async def __aenter__(self):
         await self._browser_manager.start()
-        self._crawler.set_cdp_endpoint(
-            await self._browser_manager.get_websocket_debugger_url()
-        )
+        self._cdp_endpoint = await self._browser_manager.get_websocket_debugger_url()
+        if self._cdp_endpoint:
+            self._crawler.set_cdp_endpoint(self._cdp_endpoint)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -120,7 +131,7 @@ class Scout:
                     if depth > config.max_depth:
                         continue
 
-                    async with self._crawler as crawler:
+                    async with self._new_crawler() as crawler:
                         crawler.set_scrolling_rule(config.scrolling)
                         doc = await crawler.scrape(
                             current_url,
