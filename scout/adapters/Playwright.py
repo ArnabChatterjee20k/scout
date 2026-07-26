@@ -112,8 +112,7 @@ class PlaywrightAdapter:
         Extract SEO-oriented signals from the live DOM (meta, link rel, OG, Twitter).
         All fields are merged as top-level keys on :attr:`Document.metadata`.
         """
-        return await page.evaluate(
-            """() => {
+        return await page.evaluate("""() => {
                 const trim = (v) => (v && String(v).trim()) || null;
 
                 const byName = (name) => {
@@ -266,8 +265,7 @@ class PlaywrightAdapter:
                     dns_prefetch_urls: linkHrefsAll("dns-prefetch"),
                     preconnect_urls: linkHrefsAll("preconnect"),
                 };
-            }"""
-        )
+            }""")
 
     async def scrape(self, url: str, actions: list[Action] = []):
         page = await self._new_page()
@@ -476,45 +474,92 @@ class PlaywrightAdapter:
                     throw new Error(`Container not found: ${config.container_selector}`);
                 }
 
+                // When the selector points at the page root (body/html) the
+                // element itself does not scroll — the viewport does. Drive the
+                // document scrolling element instead, and read/write innerHTML
+                // from <body>. `isRoot` also disables the destructive chunk
+                // merge below: we must never overwrite the whole page's markup.
+                const isRoot =
+                    container === document.body ||
+                    container === document.documentElement;
+                const scroller = isRoot
+                    ? document.scrollingElement || document.documentElement
+                    : container;
+                const contentEl = isRoot ? document.body : container;
+
                 const htmlChunks = [];
-                let previousHTML = container.innerHTML;
+                let previousHTML = contentEl.innerHTML;
                 let scrollCount = 0;
 
-                let scrollAmount;
-                if (typeof config.scroll_by === "number") {
-                    scrollAmount = config.scroll_by;
-                } else if (config.scroll_by === "page_height") {
-                    scrollAmount = window.innerHeight;
-                } else {
-                    scrollAmount = container.offsetHeight;
-                }
+                // Resolve the per-step scroll amount fresh on each iteration:
+                // container/viewport sizes can change as content loads.
+                const computeScrollAmount = () => {
+                    if (typeof config.scroll_by === "number") {
+                        return config.scroll_by;
+                    } else if (config.scroll_by === "page_height") {
+                        return window.innerHeight;
+                    }
+                    // "container_height": for the root scroller the element
+                    // height is the full document, which would jump straight to
+                    // the bottom — step by one viewport instead.
+                    return isRoot ? window.innerHeight : container.offsetHeight;
+                };
 
-                while (scrollCount < config.scroll_count) {
-                    container.scrollTop += scrollAmount;
+                // Loop bounds: keep scrolling until either the time budget
+                // (scroll_interval) elapses or the max step count is reached.
+                const startTime = Date.now();
+                const intervalMs =
+                    config.scroll_interval > 0
+                        ? config.scroll_interval * 1000
+                        : Infinity;
+                const maxSteps =
+                    config.scroll_count > 0 ? config.scroll_count : Infinity;
+
+                // Stop early if we sit at the bottom with no new content for a
+                // few consecutive steps (page has genuinely stopped loading).
+                const MAX_STAGNANT_STEPS = 3;
+                let stagnantCount = 0;
+
+                while (
+                    scrollCount < maxSteps &&
+                    Date.now() - startTime < intervalMs
+                ) {
+                    scroller.scrollTop += computeScrollAmount();
 
                     await new Promise((resolve) =>
                         setTimeout(resolve, config.wait_after_scroll * 1000)
                     );
 
-                    const currentHTML = container.innerHTML;
+                    const currentHTML = contentEl.innerHTML;
 
                     if (currentHTML === previousHTML) {
                         // No change, continue scrolling.
                     } else if (currentHTML.startsWith(previousHTML)) {
                         // New content appended in-place, no chunk capture required.
-                    } else {
+                    } else if (!isRoot) {
                         // Items replaced, capture previous chunk for merge.
+                        // Only for nested containers — never merge the page root.
                         htmlChunks.push(previousHTML);
+                    }
+
+                    const atBottom =
+                        scroller.scrollTop + scroller.clientHeight >=
+                        scroller.scrollHeight - 10;
+
+                    // Only treat "at bottom" as an end condition once content has
+                    // stopped changing; virtualized feeds briefly report the
+                    // bottom before loading the next chunk.
+                    if (atBottom && currentHTML === previousHTML) {
+                        stagnantCount++;
+                    } else {
+                        stagnantCount = 0;
                     }
 
                     previousHTML = currentHTML;
                     scrollCount++;
 
-                    if (
-                        container.scrollTop + container.clientHeight >=
-                        container.scrollHeight - 10
-                    ) {
-                        if (htmlChunks.length > 0) {
+                    if (stagnantCount >= MAX_STAGNANT_STEPS) {
+                        if (!isRoot && htmlChunks.length > 0) {
                             htmlChunks.push(currentHTML);
                         }
                         break;

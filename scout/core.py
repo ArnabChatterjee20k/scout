@@ -73,11 +73,16 @@ class VirtualScrollConfig:
     """
 
     container_selector: str
+    # Maximum number of scroll steps (hard cap so the loop can never hang).
     scroll_count: int = 20
     wait_after_scroll: float = 0.25
     scroll_by: Union[int, Literal["page_height", "container_height"]] = (
         "container_height"
     )
+    # Total wall-clock budget (seconds) to keep scrolling. The loop keeps
+    # scrolling until this interval elapses OR `scroll_count` steps are reached,
+    # whichever comes first. 0 disables the time budget (step count only).
+    scroll_interval: float = 0.0
     enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +91,7 @@ class VirtualScrollConfig:
             "scroll_count": self.scroll_count,
             "wait_after_scroll": self.wait_after_scroll,
             "scroll_by": self.scroll_by,
+            "scroll_interval": self.scroll_interval,
             "enabled": self.enabled,
         }
 
@@ -96,6 +102,7 @@ class VirtualScrollConfig:
             scroll_count=int(value.get("scroll_count", 20)),
             wait_after_scroll=float(value.get("wait_after_scroll", 0.25)),
             scroll_by=value.get("scroll_by", "container_height"),
+            scroll_interval=float(value.get("scroll_interval", 0.0)),
             enabled=bool(value.get("enabled", True)),
         )
 

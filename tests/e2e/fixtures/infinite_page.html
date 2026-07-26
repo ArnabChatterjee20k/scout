@@ -1,0 +1,59 @@
+<!doctype html>
+<!--
+  Whole-page (window-scrolled) infinite list, like a typical article feed.
+  Unlike scroll_timeline.html the scroll container is the document itself, not a
+  nested overflow:auto element. More post rows append to <body> as window
+  scrollY nears the bottom. E2E tests use VirtualScrollConfig(container_selector
+  = "body") to exercise the root-scroller path.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Infinite Page Feed</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      .post {
+        min-height: 320px;
+        padding: 24px;
+        border-bottom: 1px solid #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <header><strong>Posts</strong></header>
+    <main id="posts"></main>
+    <script>
+      (function () {
+        var total = 30;
+        var batchSize = 4;
+        var rendered = 0;
+        var posts = document.getElementById("posts");
+
+        function appendBatch() {
+          var end = Math.min(rendered + batchSize, total);
+          for (var i = rendered; i < end; i++) {
+            var article = document.createElement("article");
+            article.className = "post";
+            article.dataset.post = String(i + 1);
+            article.textContent = "post-" + (i + 1) + " body content";
+            posts.appendChild(article);
+          }
+          rendered = end;
+        }
+
+        function onScroll() {
+          var scrolled = window.scrollY + window.innerHeight;
+          if (scrolled >= document.documentElement.scrollHeight - 200) {
+            appendBatch();
+          }
+        }
+
+        window.addEventListener("scroll", onScroll);
+        appendBatch();
+      })();
+    </script>
+  </body>
+</html>

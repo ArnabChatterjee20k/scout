@@ -181,3 +181,88 @@ async def test_scout_crawl_virtual_scroll_loads_full_timeline(
     html = docs[0].html
     assert "09:00" in html
     assert "11:45" in html
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_scrape_virtual_scroll_via_set_scrolling_rule(
+    scout_instance,
+    e2e_server_url: str,
+) -> None:
+    """Direct ``scrape()`` path: scrolling is configured with
+    ``set_scrolling_rule(...)`` (NOT passed inside ``actions``)."""
+    timeline_url = f"{e2e_server_url}/scroll_timeline.html"
+    scout_instance.set_scrolling_rule(
+        ScrollingRule(
+            virtual_scroll=VirtualScrollConfig(
+                container_selector="#feed",
+                scroll_count=20,
+                wait_after_scroll=0.05,
+                scroll_by="container_height",
+            )
+        )
+    )
+
+    doc = await scout_instance.scrape(timeline_url)
+
+    html = doc.html
+    # Without scrolling only the first batch (09:00–09:30) is rendered; after
+    # virtual scroll the whole list through 11:45 must be present.
+    assert "09:00" in html
+    assert "11:45" in html
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_scrape_virtual_scroll_root_body_loads_full_page(
+    scout_instance,
+    e2e_server_url: str,
+) -> None:
+    """Root-scroller path: ``container_selector="body"`` must drive the window
+    (via document.scrollingElement) on a page whose whole document scrolls."""
+    page_url = f"{e2e_server_url}/infinite_page.html"
+    scout_instance.set_scrolling_rule(
+        ScrollingRule(
+            virtual_scroll=VirtualScrollConfig(
+                container_selector="body",
+                scroll_count=60,
+                wait_after_scroll=0.05,
+                scroll_interval=10,
+                scroll_by="container_height",
+            )
+        )
+    )
+
+    doc = await scout_instance.scrape(page_url)
+
+    html = doc.html
+    # Only post-1..4 render initially; reaching post-30 proves the window
+    # actually scrolled and triggered every lazy-load batch.
+    assert "post-1 body content" in html
+    assert "post-30 body content" in html
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_scrape_virtual_scroll_respects_scroll_count_cap(
+    scout_instance,
+    e2e_server_url: str,
+) -> None:
+    """A tight ``scroll_count`` (with the time budget disabled) must stop early:
+    a single step cannot load the entire 30-post feed."""
+    page_url = f"{e2e_server_url}/infinite_page.html"
+    scout_instance.set_scrolling_rule(
+        ScrollingRule(
+            virtual_scroll=VirtualScrollConfig(
+                container_selector="body",
+                scroll_count=1,
+                wait_after_scroll=0.05,
+                scroll_interval=0,
+                scroll_by=200,
+            )
+        )
+    )
+
+    doc = await scout_instance.scrape(page_url)
+
+    assert "post-30 body content" not in doc.html
