@@ -271,9 +271,10 @@ class Document:
         self,
         query: str,
         top_k: int = 10,
-        remove_tags: list[str] = [],
+        remove_tags: list[str] | None = None,
         *,
         use_laya: bool = False,
+        use_tev1: bool = False,
         reranker=None,
     ):
         """Return the most query-relevant content chunks of the page.
@@ -281,27 +282,39 @@ class Document:
         By default this ranks chunks with domdistill's sentence-transformers
         bi-encoder (cosine similarity). To rank with a cross-encoder reranker
         instead — which reads the query and each chunk together and is usually
-        more accurate — either pass ``use_laya=True`` (requires the optional
-        ``scout[laya]`` extra) or supply your own ``reranker`` callable with the
-        ``(query, heading, candidates) -> list[float]`` signature.
+        more accurate — use one of:
+
+        * ``use_laya=True`` — in-process laya model (needs the ``scout[laya]``
+          extra / torch).
+        * ``use_tev1=True`` — the Ollama-served ``tev1:0.8b`` decision model
+          (needs a running Ollama server; no torch).
+        * ``reranker=<callable>`` — your own ``(query, heading, candidates) ->
+          list[float]`` function.
+
+        An explicit ``reranker`` wins over the flags; ``use_laya`` wins over
+        ``use_tev1`` if both are set.
         """
         # to solve the circular import using the html parser where it required
         from .html_parser import HTMLParser
 
         parser = HTMLParser(self.html)
-        for idx in remove_tags:
-            remove_tags[idx] = remove_tags[idx].lower()
-        if "script" not in remove_tags:
-            remove_tags.append("script")
-        if "style" not in remove_tags:
-            remove_tags.append("style")
-        html = parser.remove_tags(tags=[*remove_tags])
+        # Build a fresh, lowercased tag list (never mutate the caller's list or a
+        # shared default) and always strip script/style.
+        tags = [tag.lower() for tag in (remove_tags or [])]
+        for required in ("script", "style"):
+            if required not in tags:
+                tags.append(required)
+        html = parser.remove_tags(tags=tags)
 
         rerank_fn = reranker
         if rerank_fn is None and use_laya:
             from domdistill import LayaReranker
 
             rerank_fn = LayaReranker()
+        elif rerank_fn is None and use_tev1:
+            from domdistill import Tev1Reranker
+
+            rerank_fn = Tev1Reranker()
 
         chunker = HTMLIntentChunker(html, rerank_fn=rerank_fn)
         chunks = chunker.get_chunks(query, top_k_chunks=top_k, max_merge_span=10)

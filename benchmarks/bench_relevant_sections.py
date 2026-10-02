@@ -62,22 +62,22 @@ def _make_document(html: str) -> Document:
 
 
 def run_engine(engine: str, html: str, queries: list[str]) -> dict:
-    use_laya = engine == "laya"
-    if engine not in {"embedding", "laya"}:
+    if engine not in {"embedding", "laya", "tev1"}:
         raise ValueError(f"unknown engine: {engine!r}")
+    kwargs = {"use_laya": engine == "laya", "use_tev1": engine == "tev1"}
 
     document = _make_document(html)
 
     # Warm up (model load / first call) outside the timed loop.
     warmup_started = time.perf_counter()
-    document.get_relevant_sections(queries[0], top_k=5, use_laya=use_laya)
+    document.get_relevant_sections(queries[0], top_k=5, **kwargs)
     warmup_ms = (time.perf_counter() - warmup_started) * 1000.0
 
     per_query: list[dict] = []
     latencies_ms: list[float] = []
     for query in queries:
         started = time.perf_counter()
-        chunks = document.get_relevant_sections(query, top_k=5, use_laya=use_laya)
+        chunks = document.get_relevant_sections(query, top_k=5, **kwargs)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         latencies_ms.append(elapsed_ms)
         per_query.append(
