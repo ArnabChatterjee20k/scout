@@ -270,7 +270,19 @@ class Document:
         query: str,
         top_k: int = 10,
         remove_tags: list[str] = [],
+        *,
+        use_laya: bool = False,
+        reranker=None,
     ):
+        """Return the most query-relevant content chunks of the page.
+
+        By default this ranks chunks with domdistill's sentence-transformers
+        bi-encoder (cosine similarity). To rank with a cross-encoder reranker
+        instead — which reads the query and each chunk together and is usually
+        more accurate — either pass ``use_laya=True`` (requires the optional
+        ``scout[laya]`` extra) or supply your own ``reranker`` callable with the
+        ``(query, heading, candidates) -> list[float]`` signature.
+        """
         # to solve the circular import using the html parser where it required
         from .html_parser import HTMLParser
 
@@ -282,7 +294,14 @@ class Document:
         if "style" not in remove_tags:
             remove_tags.append("style")
         html = parser.remove_tags(tags=[*remove_tags])
-        chunker = HTMLIntentChunker(html)
+
+        rerank_fn = reranker
+        if rerank_fn is None and use_laya:
+            from domdistill import LayaReranker
+
+            rerank_fn = LayaReranker()
+
+        chunker = HTMLIntentChunker(html, rerank_fn=rerank_fn)
         chunks = chunker.get_chunks(query, top_k_chunks=top_k, max_merge_span=10)
         result = [chunk.content for chunk in chunks.top_chunks]
         return result

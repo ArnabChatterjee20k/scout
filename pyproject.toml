@@ -16,6 +16,13 @@ dependencies = [
     "sentence-transformers>=5.4.1",
 ]
 
+[project.optional-dependencies]
+# Cross-encoder reranking for Document.get_relevant_sections(use_laya=True),
+# backed by domdistill's LayaReranker. Pulls in torch + laya (~1.7 GB weights).
+laya = [
+    "laya>=0.3.0",
+]
+
 [dependency-groups]
 dev = [
     "black>=26.3.1",
@@ -39,4 +46,7 @@ include = ["scout*"]
 scout = ["scripts/**/*.js", "scripts/*.js"]
 
 [tool.uv.sources]
-domdistill = { git = "https://github.com/ArnabChatterjee20k/domdistill.git" }
+# TEMPORARY: pinned to the laya-reranker branch so LayaReranker resolves before
+# https://github.com/ArnabChatterjee20k/domdistill/pull/5 merges. Revert to the
+# default-branch source (drop `branch`) once that PR is in.
+domdistill = { git = "https://github.com/ArnabChatterjee20k/domdistill.git", branch = "feat/laya-reranker" }
