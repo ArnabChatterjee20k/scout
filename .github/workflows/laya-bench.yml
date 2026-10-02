@@ -41,8 +41,8 @@ jobs:
           key: hf-laya-${{ runner.os }}
 
       - name: Install scout with laya extra (CPU torch)
+        # setup-uv (with python-version) already created .venv for us.
         run: |
-          uv venv
           uv pip install torch --index-url https://download.pytorch.org/whl/cpu
           uv pip install -e ".[laya]"
 
